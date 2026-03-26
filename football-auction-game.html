@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FC Auction – Football Manager Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #00C853;
+    --green-dim: #00913C;
+    --gold: #FFD600;
+    --red: #FF3D00;
+    --bg: #0a0e0a;
+    --surface: #111611;
+    --surface2: #1a201a;
+    --surface3: #222922;
+    --border: rgba(255,255,255,0.08);
+    --text: #e8ede8;
+    --muted: #7a8c7a;
+    --font-head: 'Barlow Condensed', sans-serif;
+    --font-body: 'Barlow', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-body); min-height: 100vh; overflow-x: hidden; }
+
+  /* PITCH BACKGROUND TEXTURE */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(255,255,255,0.012) 60px, rgba(255,255,255,0.012) 61px),
+                repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(255,255,255,0.012) 60px, rgba(255,255,255,0.012) 61px);
+    pointer-events: none; z-index: 0;
+  }
+
+  .screen { display: none; position: relative; z-index: 1; }
+  .screen.active { display: block; }
+
+  /* ─── LOBBY ─── */
+  #lobby {
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 2rem;
+  }
+  .logo { font-family: var(--font-head); font-weight: 900; font-size: clamp(3rem, 10vw, 7rem); letter-spacing: -2px; color: var(--green); line-height: 0.9; text-align: center; text-transform: uppercase; }
+  .logo span { color: var(--gold); }
+  .logo-sub { font-family: var(--font-head); font-size: 1.1rem; letter-spacing: 8px; color: var(--muted); text-transform: uppercase; margin: 0.5rem 0 2.5rem; }
+  .lobby-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; width: 100%; max-width: 520px; }
+  .lobby-card h2 { font-family: var(--font-head); font-size: 1.4rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--green); margin-bottom: 1.5rem; }
+  .field-row { margin-bottom: 1rem; }
+  .field-row label { display: block; font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 0.4rem; }
+  .field-row input, .field-row select { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 0.65rem 1rem; color: var(--text); font-family: var(--font-body); font-size: 0.95rem; outline: none; transition: border-color 0.2s; }
+  .field-row input:focus, .field-row select:focus { border-color: var(--green); }
+  .player-list { display: flex; flex-direction: column; gap: 0.5rem; margin: 1rem 0; }
+  .player-entry { display: flex; gap: 0.5rem; align-items: center; }
+  .player-entry input { flex: 1; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; background: var(--green); color: #000; font-family: var(--font-head); font-weight: 700; font-size: 1rem; letter-spacing: 1px; text-transform: uppercase; border: none; border-radius: 8px; padding: 0.75rem 1.5rem; cursor: pointer; transition: all 0.15s; }
+  .btn:hover { background: #00E55F; transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  .btn-ghost:hover { background: var(--surface2); color: var(--text); }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-red:hover { background: #ff6333; }
+  .btn-gold { background: var(--gold); color: #000; }
+  .btn-gold:hover { background: #ffe033; }
+  .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+  .btn-full { width: 100%; margin-top: 0.5rem; padding: 1rem; font-size: 1.1rem; }
+
+  /* ─── AUCTION ─── */
+  #auction-screen { padding: 1rem; }
+  .auction-layout { display: grid; grid-template-columns: 1fr 340px; gap: 1rem; max-width: 1200px; margin: 0 auto; }
+  @media (max-width: 900px) { .auction-layout { grid-template-columns: 1fr; } }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+  .card-title { font-family: var(--font-head); font-size: 0.75rem; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 1rem; }
+
+  /* Player spotlight */
+  .player-spot { text-align: center; position: relative; overflow: hidden; }
+  .player-spot::before { content: ''; position: absolute; top: -60px; left: 50%; transform: translateX(-50%); width: 300px; height: 300px; background: radial-gradient(circle, rgba(0,200,83,0.08) 0%, transparent 70%); border-radius: 50%; }
+  .player-rating-big { font-family: var(--font-head); font-size: 5rem; font-weight: 900; color: var(--gold); line-height: 1; }
+  .player-name-big { font-family: var(--font-head); font-size: 2.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: -1px; margin: 0.25rem 0; }
+  .player-meta { display: flex; gap: 1rem; justify-content: center; margin: 0.5rem 0; }
+  .player-meta span { font-size: 0.8rem; color: var(--muted); }
+  .player-meta strong { color: var(--text); }
+  .player-attrs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin: 1rem 0; }
+  .attr-box { background: var(--surface2); border-radius: 8px; padding: 0.5rem; text-align: center; }
+  .attr-val { font-family: var(--font-head); font-size: 1.4rem; font-weight: 700; color: var(--green); }
+  .attr-lbl { font-size: 0.65rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+
+  /* Timer */
+  .auction-timer { font-family: var(--font-head); font-size: 3rem; font-weight: 900; color: var(--gold); text-align: center; }
+  .auction-timer.urgent { color: var(--red); animation: pulse 0.5s ease-in-out infinite alternate; }
+  @keyframes pulse { from { opacity: 1; } to { opacity: 0.6; } }
+
+  /* Bid bar */
+  .bid-display { font-family: var(--font-head); font-size: 2rem; font-weight: 700; color: var(--green); text-align: center; }
+  .bid-by { font-size: 0.8rem; color: var(--muted); text-align: center; margin-top: 0.25rem; }
+  .bid-controls { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
+  .bid-presets { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+  .bid-preset { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); font-family: var(--font-head); font-size: 0.85rem; padding: 0.3rem 0.6rem; border-radius: 6px; cursor: pointer; transition: all 0.15s; }
+  .bid-preset:hover { border-color: var(--green); color: var(--green); }
+
+  /* Current turn indicator */
+  .turn-banner { background: linear-gradient(135deg, var(--green-dim), #004d1f); border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; }
+  .turn-name { font-family: var(--font-head); font-size: 1.1rem; font-weight: 700; text-transform: uppercase; }
+  .turn-budget { font-size: 0.85rem; color: rgba(255,255,255,0.7); }
+
+  /* Bidders sidebar */
+  .bidder-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
+  .bidder-row:last-child { border-bottom: none; }
+  .bidder-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--surface3); display: flex; align-items: center; justify-content: center; font-family: var(--font-head); font-weight: 700; font-size: 0.85rem; color: var(--green); flex-shrink: 0; }
+  .bidder-info { flex: 1; }
+  .bidder-name { font-size: 0.9rem; font-weight: 600; }
+  .bidder-stats { font-size: 0.75rem; color: var(--muted); }
+  .bidder-budget { font-family: var(--font-head); font-size: 1rem; font-weight: 700; }
+
+  /* Squad progress */
+  .squad-bar { display: flex; gap: 2px; margin: 0.5rem 0; }
+  .sq-slot { flex: 1; height: 6px; border-radius: 2px; background: var(--surface3); }
+  .sq-slot.filled { background: var(--green); }
+  .sq-slot.need { background: var(--red); }
+
+  /* Auction log */
+  .log-list { max-height: 120px; overflow-y: auto; font-size: 0.78rem; }
+  .log-entry { padding: 0.25rem 0; border-bottom: 1px solid var(--border); color: var(--muted); }
+  .log-entry.win { color: var(--green); }
+  .log-entry .bold { font-weight: 600; color: var(--text); }
+
+  /* Header */
+  .auction-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; max-width: 1200px; margin-left: auto; margin-right: auto; }
+  .auction-logo { font-family: var(--font-head); font-size: 1.5rem; font-weight: 900; color: var(--green); text-transform: uppercase; letter-spacing: -1px; }
+  .auction-logo span { color: var(--gold); }
+  .progress-pill { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 0.3rem 0.8rem; font-size: 0.8rem; color: var(--muted); }
+
+  /* ─── RESULTS / SQUADS ─── */
+  #results-screen { padding: 1.5rem; }
+  .results-header { text-align: center; margin-bottom: 2rem; }
+  .results-title { font-family: var(--font-head); font-size: 3rem; font-weight: 900; text-transform: uppercase; letter-spacing: -1px; color: var(--green); }
+  .teams-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; max-width: 1200px; margin: 0 auto 2rem; }
+  .team-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+  .team-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
+  .team-card-name { font-family: var(--font-head); font-size: 1.3rem; font-weight: 900; text-transform: uppercase; }
+  .team-card-budget { font-size: 0.85rem; color: var(--muted); }
+  .squad-list { display: flex; flex-direction: column; gap: 0.3rem; max-height: 240px; overflow-y: auto; }
+  .squad-player { display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; padding: 0.3rem 0.5rem; border-radius: 6px; background: var(--surface2); }
+  .sp-rating { font-family: var(--font-head); font-weight: 700; color: var(--gold); min-width: 28px; }
+  .sp-pos { font-size: 0.7rem; background: var(--surface3); border-radius: 4px; padding: 1px 4px; color: var(--muted); min-width: 30px; text-align: center; }
+  .sp-name { flex: 1; font-weight: 500; }
+  .sp-price { color: var(--green); font-family: var(--font-head); font-weight: 700; }
+  .team-ovr { font-family: var(--font-head); font-size: 2.5rem; font-weight: 900; color: var(--gold); }
+  .team-ovr-label { font-size: 0.7rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+
+  .results-actions { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; max-width: 600px; margin: 0 auto 2rem; }
+
+  /* ─── MATCH ─── */
+  #match-screen { padding: 1.5rem; min-height: 100vh; }
+  .match-setup { max-width: 700px; margin: 0 auto; }
+  .match-vs { text-align: center; margin: 2rem 0; }
+  .match-vs-title { font-family: var(--font-head); font-size: 1rem; letter-spacing: 4px; text-transform: uppercase; color: var(--muted); }
+  .match-teams-row { display: flex; align-items: center; gap: 1rem; justify-content: center; margin: 1rem 0; }
+  .match-team-name { font-family: var(--font-head); font-size: 2rem; font-weight: 900; text-transform: uppercase; }
+  .match-vs-badge { font-family: var(--font-head); font-size: 1.2rem; font-weight: 700; color: var(--muted); padding: 0 0.5rem; }
+  .match-selector { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; }
+  .match-selector select { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 0.65rem 1rem; color: var(--text); font-family: var(--font-body); font-size: 1rem; outline: none; }
+
+  /* Match simulation */
+  #match-sim { display: none; max-width: 700px; margin: 0 auto; }
+  .match-score-display { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; text-align: center; margin-bottom: 1rem; }
+  .score-row { display: flex; align-items: center; justify-content: center; gap: 1.5rem; margin: 0.5rem 0; }
+  .score-team { font-family: var(--font-head); font-size: 1.1rem; font-weight: 700; text-transform: uppercase; color: var(--muted); }
+  .score-num { font-family: var(--font-head); font-size: 4rem; font-weight: 900; color: var(--text); line-height: 1; }
+  .score-dash { font-family: var(--font-head); font-size: 2rem; color: var(--surface3); }
+  .match-minute { font-family: var(--font-head); font-size: 0.9rem; color: var(--green); letter-spacing: 2px; }
+  .events-feed { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.4rem; }
+  .event-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.4rem 0.5rem; border-radius: 6px; font-size: 0.85rem; animation: slideIn 0.3s ease; }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+  .event-item.goal { background: rgba(0,200,83,0.12); border-left: 3px solid var(--green); }
+  .event-item.miss { background: rgba(255,61,0,0.08); }
+  .event-item.card { background: rgba(255,214,0,0.08); border-left: 3px solid var(--gold); }
+  .event-item.foul { background: rgba(255,255,255,0.03); }
+  .event-min { font-family: var(--font-head); font-weight: 700; color: var(--muted); min-width: 36px; }
+  .event-icon { font-size: 1rem; min-width: 20px; }
+  .event-text { flex: 1; color: var(--text); }
+
+  /* ─── LEADERBOARD ─── */
+  #leaderboard-screen { padding: 1.5rem; }
+  .lb-title { font-family: var(--font-head); font-size: 2.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: -1px; color: var(--gold); text-align: center; margin-bottom: 2rem; }
+  .lb-table { max-width: 700px; margin: 0 auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .lb-row { display: grid; grid-template-columns: 48px 1fr 60px 60px 60px 80px; align-items: center; padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--border); }
+  .lb-row:last-child { border-bottom: none; }
+  .lb-row.header { background: var(--surface2); font-size: 0.7rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  .lb-rank { font-family: var(--font-head); font-size: 1.2rem; font-weight: 900; }
+  .lb-rank.gold { color: var(--gold); }
+  .lb-rank.silver { color: #b0b8b0; }
+  .lb-rank.bronze { color: #cd7f32; }
+  .lb-team-name { font-family: var(--font-head); font-size: 1rem; font-weight: 700; text-transform: uppercase; }
+  .lb-pts { font-family: var(--font-head); font-weight: 700; color: var(--green); text-align: center; }
+  .lb-num { text-align: center; color: var(--muted); font-size: 0.9rem; }
+  .lb-ovr { font-family: var(--font-head); font-weight: 700; color: var(--gold); text-align: right; }
+
+  /* Notification */
+  .notif { position: fixed; top: 1rem; right: 1rem; z-index: 999; background: var(--surface); border: 1px solid var(--green); border-radius: 10px; padding: 0.75rem 1.25rem; font-size: 0.9rem; color: var(--green); font-weight: 600; transform: translateX(120%); transition: transform 0.3s ease; box-shadow: 0 4px 20px rgba(0,200,83,0.2); }
+  .notif.show { transform: translateX(0); }
+
+  /* Nav */
+  .nav-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0.75rem 1.5rem; display: flex; gap: 0.5rem; align-items: center; position: sticky; top: 0; z-index: 100; }
+  .nav-item { font-family: var(--font-head); font-size: 0.8rem; letter-spacing: 1px; text-transform: uppercase; padding: 0.35rem 0.75rem; border-radius: 6px; cursor: pointer; color: var(--muted); border: none; background: none; transition: all 0.15s; }
+  .nav-item:hover { color: var(--text); background: var(--surface2); }
+  .nav-item.active { color: var(--green); background: rgba(0,200,83,0.1); }
+  .nav-spacer { flex: 1; }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; max-width: 480px; width: 90%; text-align: center; }
+  .modal h2 { font-family: var(--font-head); font-size: 2rem; font-weight: 900; text-transform: uppercase; margin-bottom: 1rem; }
+  .modal p { color: var(--muted); margin-bottom: 1.5rem; line-height: 1.6; }
+  .modal-actions { display: flex; gap: 0.75rem; justify-content: center; }
+
+  /* Skip button */
+  .skip-btn { position: absolute; bottom: 1rem; right: 1rem; }
+
+  /* Position color dots */
+  .pos-gk { color: #FFD600; }
+  .pos-def { color: #4fc3f7; }
+  .pos-mid { color: #aed581; }
+  .pos-att { color: #ff8a65; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--surface2); }
+  ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  .highlight { color: var(--gold); }
+  .text-green { color: var(--green); }
+  .text-red { color: var(--red); }
+  .text-muted { color: var(--muted); }
+  .mt-1 { margin-top: 0.5rem; }
+  .mt-2 { margin-top: 1rem; }
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .separator { height: 1px; background: var(--border); margin: 1rem 0; }
+</style>
+</head>
+<body>
+
+<!-- NOTIFICATION -->
+<div class="notif" id="notif"></div>
+
+<!-- ═══════════════ LOBBY SCREEN ═══════════════ -->
+<div id="lobby-screen" class="screen active">
+  <div id="lobby">
+    <div class="logo">FC<span>Auction</span></div>
+    <div class="logo-sub">Football Manager Simulator</div>
+    <div class="lobby-card">
+      <h2>⚽ Set Up Your League</h2>
+      <div class="field-row">
+        <label>Your Team Name</label>
+        <input type="text" id="host-name" placeholder="e.g. Galacticos FC" maxlength="24"/>
+      </div>
+      <div class="field-row">
+        <label>Starting Budget (per team)</label>
+        <select id="budget-select">
+          <option value="500">£500M</option>
+          <option value="1000" selected>£1,000M</option>
+          <option value="1500">£1,500M</option>
+          <option value="2000">£2,000M</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <label>Bid Timer (seconds)</label>
+        <select id="timer-select">
+          <option value="15">15 seconds</option>
+          <option value="30" selected>30 seconds</option>
+          <option value="45">45 seconds</option>
+          <option value="60">60 seconds</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <label>Target squad size (min per team)</label>
+        <select id="squad-size-select">
+          <option value="11">11 players</option>
+          <option value="15" selected>15 players</option>
+          <option value="18">18 players</option>
+          <option value="23">23 players</option>
+        </select>
+      </div>
+      <div class="separator"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <label style="font-size:0.75rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);">Other Managers</label>
+        <button class="btn btn-ghost btn-sm" onclick="addPlayer()">+ Add</button>
+      </div>
+      <div class="player-list" id="player-list"></div>
+      <button class="btn btn-full" onclick="startAuction()">🚀 Start Auction</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ AUCTION SCREEN ═══════════════ -->
+<div id="auction-screen" class="screen">
+  <div class="nav-bar">
+    <div class="auction-logo">FC<span>Auction</span></div>
+    <div class="nav-spacer"></div>
+    <div class="progress-pill" id="auction-progress">Player 1 of 0</div>
+    <button class="btn btn-ghost btn-sm" onclick="showNotifManual('Use the Skip button to pass on a player')">?</button>
+  </div>
+  <div style="padding:1rem;">
+    <div class="auction-layout">
+      <!-- LEFT: Player + Bidding -->
+      <div style="display:flex;flex-direction:column;gap:1rem;">
+
+        <div class="card" id="current-turn-card">
+          <div class="turn-banner" id="turn-banner">
+            <div>
+              <div class="card-title" style="margin:0;font-size:0.65rem;">NOW BIDDING</div>
+              <div class="turn-name" id="turn-name">-</div>
+            </div>
+            <div class="turn-budget">Budget: <strong id="turn-budget">-</strong></div>
+          </div>
+        </div>
+
+        <div class="card player-spot">
+          <div class="card-title">CURRENT PLAYER</div>
+          <div class="player-rating-big" id="spot-rating">--</div>
+          <div class="player-name-big" id="spot-name">LOADING...</div>
+          <div class="player-meta">
+            <span><strong id="spot-club">-</strong></span>
+            <span>|</span>
+            <span id="spot-nation">-</span>
+            <span>|</span>
+            <span id="spot-pos" style="font-weight:600;">-</span>
+          </div>
+          <div class="player-attrs" id="spot-attrs"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">CURRENT BID</div>
+          <div class="bid-display" id="bid-display">£0M</div>
+          <div class="bid-by" id="bid-by">No bids yet</div>
+          <div class="bid-controls">
+            <button class="btn" style="flex:1;" onclick="placeBid()">🔨 BID</button>
+            <button class="btn btn-ghost" onclick="skipPlayer()">Skip Player</button>
+          </div>
+          <div class="bid-presets" id="bid-presets"></div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+            <div class="card-title" style="margin:0;">AUCTION LOG</div>
+            <div class="auction-timer" id="auction-timer">30</div>
+          </div>
+          <div class="log-list" id="log-list"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Managers sidebar -->
+      <div style="display:flex;flex-direction:column;gap:1rem;">
+        <div class="card">
+          <div class="card-title">MANAGERS</div>
+          <div id="bidders-list"></div>
+        </div>
+        <div class="card" id="sold-panel" style="display:none;">
+          <div class="card-title">JUST SOLD</div>
+          <div id="sold-info"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">PLAYERS LEFT IN POOL</div>
+          <div class="flex-between" style="font-size:0.85rem;">
+            <span class="text-muted">Pool</span>
+            <span id="pool-remaining" class="text-green" style="font-family:var(--font-head);font-weight:700;font-size:1.1rem;">-</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SQUADS SCREEN ═══════════════ -->
+<div id="results-screen" class="screen">
+  <div style="position:sticky;top:0;z-index:100;">
+    <div class="nav-bar">
+      <div class="auction-logo">FC<span>Auction</span></div>
+      <div class="nav-spacer"></div>
+      <button class="nav-item" onclick="showScreen('match-screen')">⚽ Simulate Match</button>
+      <button class="nav-item" onclick="showScreen('leaderboard-screen')">🏆 Standings</button>
+    </div>
+  </div>
+  <div style="padding:1.5rem;">
+    <div class="results-header">
+      <div class="results-title">🏟️ Squads</div>
+      <p class="text-muted" style="margin-top:0.5rem;">Auction complete. Review all teams below.</p>
+    </div>
+    <div class="teams-grid" id="teams-grid"></div>
+    <div class="results-actions">
+      <button class="btn btn-gold" onclick="showScreen('match-screen')">⚽ Play Match</button>
+      <button class="btn btn-ghost" onclick="restartGame()">🔁 New Auction</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ MATCH SCREEN ═══════════════ -->
+<div id="match-screen" class="screen">
+  <div class="nav-bar">
+    <div class="auction-logo">FC<span>Auction</span></div>
+    <div class="nav-spacer"></div>
+    <button class="nav-item" onclick="showScreen('results-screen')">📋 Squads</button>
+    <button class="nav-item" onclick="showScreen('leaderboard-screen')">🏆 Standings</button>
+  </div>
+  <div style="padding:1.5rem;">
+    <div class="match-setup" id="match-setup">
+      <div class="match-vs">
+        <div class="match-vs-title">Select a Match</div>
+        <div class="match-teams-row">
+          <select id="home-team-select" class="field-row" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.65rem 1rem;color:var(--text);font-family:var(--font-body);font-size:1rem;outline:none;"></select>
+          <div class="match-vs-badge">VS</div>
+          <select id="away-team-select" class="field-row" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.65rem 1rem;color:var(--text);font-family:var(--font-body);font-size:1rem;outline:none;"></select>
+        </div>
+        <button class="btn btn-full mt-2" onclick="startMatch()">⚽ Kick Off!</button>
+      </div>
+    </div>
+    <div id="match-sim">
+      <div class="match-score-display">
+        <div class="match-minute" id="match-minute">KO</div>
+        <div class="score-row">
+          <div class="score-team" id="home-team-label">-</div>
+          <div class="score-num" id="home-score">0</div>
+          <div class="score-dash">-</div>
+          <div class="score-num" id="away-score">0</div>
+          <div class="score-team" id="away-team-label">-</div>
+        </div>
+        <div id="match-status" style="font-size:0.8rem;color:var(--muted);margin-top:0.5rem;"></div>
+      </div>
+      <div class="events-feed" id="events-feed"></div>
+      <div style="margin-top:1rem;display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;" id="match-actions">
+        <button class="btn btn-gold" onclick="playAgain()">🔁 Play Again</button>
+        <button class="btn btn-ghost" onclick="showScreen('results-screen')">📋 Back to Squads</button>
+        <button class="btn btn-ghost" onclick="showScreen('leaderboard-screen')">🏆 Standings</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ LEADERBOARD SCREEN ═══════════════ -->
+<div id="leaderboard-screen" class="screen">
+  <div class="nav-bar">
+    <div class="auction-logo">FC<span>Auction</span></div>
+    <div class="nav-spacer"></div>
+    <button class="nav-item" onclick="showScreen('results-screen')">📋 Squads</button>
+    <button class="nav-item" onclick="showScreen('match-screen')">⚽ Match</button>
+    <button class="nav-item btn-ghost btn btn-sm" onclick="restartGame()" style="background:transparent;border:1px solid var(--border);color:var(--muted);">🔁 New Game</button>
+  </div>
+  <div style="padding:1.5rem;">
+    <div class="lb-title">🏆 Standings</div>
+    <div class="lb-table">
+      <div class="lb-row header">
+        <div>#</div><div>Team</div><div style="text-align:center;">Pts</div><div style="text-align:center;">W</div><div style="text-align:center;">L</div><div style="text-align:right;">OVR</div>
+      </div>
+      <div id="lb-rows"></div>
+    </div>
+    <div style="margin-top:1.5rem;text-align:center;color:var(--muted);font-size:0.82rem;">Win a match to earn 3 points • Draw = 1 point • Loss = 0 points</div>
+  </div>
+</div>
+
+<!-- ═══════════════ UNSOLD MODAL ═══════════════ -->
+<div class="modal-overlay" id="unsold-modal">
+  <div class="modal">
+    <h2>🔔 Auction End</h2>
+    <p id="unsold-modal-text">Some teams do not have enough players...</p>
+    <div class="modal-actions">
+      <button class="btn" onclick="finishAuction()">View Squads</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// PLAYER DATABASE — 500+ players with EAFC-style ratings
+// ═══════════════════════════════════════════════
+const PLAYER_DB = [
+  // ─── Attackers ───
+  {n:"Kylian Mbappé",ovr:91,pos:"ST",club:"Real Madrid",nat:"France",pac:97,sho:90,pas:80,dri:93,def:36,phy:76},
+  {n:"Erling Haaland",ovr:91,pos:"ST",club:"Man City",nat:"Norway",pac:89,sho:94,pas:65,dri:80,def:45,phy:88},
+  {n:"Vinicius Jr.",ovr:91,pos:"LW",club:"Real Madrid",nat:"Brazil",pac:96,sho:87,pas:80,dri:94,def:28,phy:73},
+  {n:"Rodri",ovr:91,pos:"CDM",club:"Man City",nat:"Spain",pac:58,sho:67,pas:88,dri:82,def:89,phy:85},
+  {n:"Lionel Messi",ovr:90,pos:"RW",club:"Inter Miami",nat:"Argentina",pac:71,sho:91,pas:90,dri:95,def:38,phy:65},
+  {n:"Jude Bellingham",ovr:90,pos:"CM",club:"Real Madrid",nat:"England",pac:78,sho:84,pas:83,dri:88,def:74,phy:83},
+  {n:"Mohamed Salah",ovr:89,pos:"RW",club:"Liverpool",nat:"Egypt",pac:93,sho:89,pas:80,dri:91,def:44,phy:75},
+  {n:"Lamine Yamal",ovr:88,pos:"RW",club:"Barcelona",nat:"Spain",pac:91,sho:82,pas:81,dri:92,def:30,phy:67},
+  {n:"Harry Kane",ovr:89,pos:"ST",club:"Bayern Munich",nat:"England",pac:73,sho:93,pas:83,dri:82,def:47,phy:83},
+  {n:"Robert Lewandowski",ovr:87,pos:"ST",club:"Barcelona",nat:"Poland",pac:77,sho:91,pas:79,dri:85,def:43,phy:82},
+  {n:"Neymar Jr.",ovr:86,pos:"LW",club:"Al-Hilal",nat:"Brazil",pac:88,sho:83,pas:86,dri:94,def:29,phy:63},
+  {n:"Bukayo Saka",ovr:87,pos:"RW",club:"Arsenal",nat:"England",pac:88,sho:83,pas:82,dri:87,def:50,phy:73},
+  {n:"Marcus Rashford",ovr:83,pos:"LW",club:"Man Utd",nat:"England",pac:92,sho:82,pas:74,dri:86,def:34,phy:76},
+  {n:"Son Heung-min",ovr:86,pos:"LW",club:"Tottenham",nat:"S. Korea",pac:88,sho:87,pas:82,dri:87,def:42,phy:72},
+  {n:"Phil Foden",ovr:87,pos:"CAM",club:"Man City",nat:"England",pac:83,sho:86,pas:84,dri:89,def:48,phy:72},
+  {n:"Rafael Leão",ovr:87,pos:"LW",club:"AC Milan",nat:"Portugal",pac:94,sho:83,pas:76,dri:89,def:28,phy:76},
+  {n:"Julián Álvarez",ovr:85,pos:"ST",club:"Atlético Madrid",nat:"Argentina",pac:80,sho:84,pas:77,dri:82,pac:80,def:50,phy:77},
+  {n:"Dušan Vlahović",ovr:85,pos:"ST",club:"Juventus",nat:"Serbia",pac:78,sho:88,pas:67,dri:78,def:36,phy:83},
+  {n:"Bernardo Silva",ovr:87,pos:"CM",club:"Man City",nat:"Portugal",pac:80,sho:80,pas:87,dri:89,def:64,phy:69},
+  {n:"Pedro",ovr:84,pos:"ST",club:"Lazio",nat:"Brazil",pac:74,sho:85,pas:74,dri:82,def:38,phy:72},
+  {n:"Jonathan David",ovr:84,pos:"ST",club:"Lille",nat:"Canada",pac:85,sho:85,pas:73,dri:81,def:34,phy:72},
+  {n:"Nico Williams",ovr:84,pos:"LW",club:"Athletic Bilbao",nat:"Spain",pac:92,sho:79,pas:77,dri:88,def:29,phy:70},
+  {n:"Antoine Griezmann",ovr:85,pos:"CAM",club:"Atlético Madrid",nat:"France",pac:77,sho:87,pas:82,dri:85,def:52,phy:74},
+  {n:"Cody Gakpo",ovr:83,pos:"LW",club:"Liverpool",nat:"Netherlands",pac:88,sho:81,pas:77,dri:83,def:34,phy:78},
+  {n:"Christopher Nkunku",ovr:84,pos:"CAM",club:"Chelsea",nat:"France",pac:85,sho:83,pas:79,dri:86,def:39,phy:74},
+  {n:"Olivier Giroud",ovr:82,pos:"ST",club:"LA Galaxy",nat:"France",pac:63,sho:83,pas:71,dri:74,def:38,phy:82},
+  {n:"Romelu Lukaku",ovr:83,pos:"ST",club:"Napoli",nat:"Belgium",pac:79,sho:82,pas:65,dri:74,def:38,phy:91},
+  {n:"Darwin Núñez",ovr:82,pos:"ST",club:"Liverpool",nat:"Uruguay",pac:91,sho:80,pas:64,dri:79,def:34,phy:80},
+  {n:"Lorenzo Pellegrini",ovr:83,pos:"CAM",club:"Roma",nat:"Italy",pac:77,sho:79,pas:83,dri:82,def:57,phy:73},
+  {n:"Vitinha",ovr:84,pos:"CM",club:"PSG",nat:"Portugal",pac:76,sho:73,pas:87,dri:87,def:69,phy:69},
+  {n:"Ferran Torres",ovr:80,pos:"RW",club:"Barcelona",nat:"Spain",pac:87,sho:79,pas:75,dri:82,def:35,phy:72},
+  {n:"Ademola Lookman",ovr:83,pos:"LW",club:"Atalanta",nat:"Nigeria",pac:89,sho:79,pas:74,dri:85,def:31,phy:71},
+  {n:"Matteo Darmian",ovr:79,pos:"RW",club:"Inter Milan",nat:"Italy",pac:77,sho:65,pas:73,dri:72,def:77,phy:74},
+  {n:"Alejandro Garnacho",ovr:81,pos:"LW",club:"Man Utd",nat:"Argentina",pac:90,sho:78,pas:71,dri:84,def:28,phy:69},
+  {n:"Michael Olise",ovr:83,pos:"RW",club:"Bayern Munich",nat:"France",pac:85,sho:82,pas:79,dri:87,def:34,phy:71},
+  {n:"Leroy Sané",ovr:83,pos:"RW",club:"Bayern Munich",nat:"Germany",pac:93,sho:82,pas:78,dri:87,def:33,phy:73},
+  {n:"Lorenzo Insigne",ovr:80,pos:"LW",club:"Toronto FC",nat:"Italy",pac:78,sho:82,pas:81,dri:87,def:37,phy:63},
+  {n:"Ousmane Dembélé",ovr:84,pos:"RW",club:"PSG",nat:"France",pac:95,sho:80,pas:73,dri:88,def:27,phy:68},
+  {n:"Memphis Depay",ovr:80,pos:"ST",club:"Atlético Madrid",nat:"Netherlands",pac:82,sho:81,pas:75,dri:83,def:35,phy:75},
+  {n:"Patrik Schick",ovr:80,pos:"ST",club:"Bayer Leverkusen",nat:"Czech Rep.",pac:72,sho:82,pas:68,dri:76,def:30,phy:82},
+
+  // ─── Midfielders ───
+  {n:"Kevin De Bruyne",ovr:90,pos:"CM",club:"Man City",nat:"Belgium",pac:74,sho:82,pas:95,dri:89,def:67,phy:78},
+  {n:"Luka Modrić",ovr:87,pos:"CM",club:"Real Madrid",nat:"Croatia",pac:71,sho:75,pas:91,dri:90,def:73,phy:66},
+  {n:"Toni Kroos",ovr:87,pos:"CM",club:"Real Madrid",nat:"Germany",pac:57,sho:80,pas:93,dri:83,def:74,phy:70},
+  {n:"Pedri",ovr:87,pos:"CM",club:"Barcelona",nat:"Spain",pac:76,sho:77,pas:87,dri:90,def:64,phy:66},
+  {n:"Gavi",ovr:86,pos:"CM",club:"Barcelona",nat:"Spain",pac:76,sho:73,pas:85,dri:88,def:68,phy:68},
+  {n:"Federico Valverde",ovr:87,pos:"CM",club:"Real Madrid",nat:"Uruguay",pac:85,sho:80,pas:83,dri:84,def:76,phy:84},
+  {n:"Declan Rice",ovr:86,pos:"CDM",club:"Arsenal",nat:"England",pac:75,sho:71,pas:82,dri:77,def:87,phy:83},
+  {n:"Eduardo Camavinga",ovr:84,pos:"CM",club:"Real Madrid",nat:"France",pac:82,sho:67,pas:81,dri:82,def:78,phy:78},
+  {n:"Aurélien Tchouaméni",ovr:85,pos:"CDM",club:"Real Madrid",nat:"France",pac:74,sho:69,pas:79,dri:76,def:87,phy:84},
+  {n:"Xhaka Granit",ovr:84,pos:"CM",club:"Bayer Leverkusen",nat:"Switzerland",pac:63,sho:74,pas:85,dri:74,def:82,phy:82},
+  {n:"Florian Wirtz",ovr:87,pos:"CAM",club:"Bayer Leverkusen",nat:"Germany",pac:78,sho:82,pas:86,dri:90,def:44,phy:69},
+  {n:"Martin Ødegaard",ovr:87,pos:"CAM",club:"Arsenal",nat:"Norway",pac:76,sho:83,pas:88,dri:89,def:57,phy:65},
+  {n:"Nicolo Barella",ovr:86,pos:"CM",club:"Inter Milan",nat:"Italy",pac:76,sho:80,pas:84,dri:83,def:77,phy:84},
+  {n:"Bruno Fernandes",ovr:85,pos:"CAM",club:"Man Utd",nat:"Portugal",pac:72,sho:84,pas:89,dri:85,def:55,phy:73},
+  {n:"Joshua Kimmich",ovr:87,pos:"CDM",club:"Bayern Munich",nat:"Germany",pac:69,sho:73,pas:90,dri:84,def:84,phy:78},
+  {n:"Leon Goretzka",ovr:84,pos:"CM",club:"Bayern Munich",nat:"Germany",pac:75,sho:78,pas:81,dri:77,def:79,phy:87},
+  {n:"İlkay Gündoğan",ovr:84,pos:"CM",club:"Barcelona",nat:"Germany",pac:62,sho:79,pas:89,dri:83,def:73,phy:73},
+  {n:"Thomas Müller",ovr:84,pos:"CAM",club:"Bayern Munich",nat:"Germany",pac:68,sho:81,pas:86,dri:83,def:58,phy:74},
+  {n:"Sergej Milinković-Savić",ovr:85,pos:"CM",club:"Al-Hilal",nat:"Serbia",pac:72,sho:81,pas:84,dri:82,def:70,phy:87},
+  {n:"Marcos Llorente",ovr:82,pos:"CM",club:"Atlético Madrid",nat:"Spain",pac:83,sho:73,pas:80,dri:79,def:77,phy:79},
+  {n:"Enzo Fernández",ovr:83,pos:"CM",club:"Chelsea",nat:"Argentina",pac:73,sho:76,pas:84,dri:82,def:75,phy:77},
+  {n:"Mattéo Guendouzi",ovr:81,pos:"CM",club:"Lazio",nat:"France",pac:77,sho:68,pas:81,dri:78,def:73,phy:80},
+  {n:"Piotr Zieliński",ovr:83,pos:"CM",club:"Inter Milan",nat:"Poland",pac:72,sho:82,pas:85,dri:84,def:62,phy:69},
+  {n:"Sandro Tonali",ovr:84,pos:"CM",club:"Newcastle",nat:"Italy",pac:68,sho:74,pas:82,dri:80,def:81,phy:80},
+  {n:"Alexis Mac Allister",ovr:83,pos:"CM",club:"Liverpool",nat:"Argentina",pac:73,sho:76,pas:83,dri:80,def:73,phy:75},
+  {n:"Thiago Alcântara",ovr:84,pos:"CM",club:"Liverpool",nat:"Spain",pac:62,sho:69,pas:90,dri:87,def:72,phy:67},
+  {n:"James Maddison",ovr:83,pos:"CAM",club:"Tottenham",nat:"England",pac:70,sho:82,pas:84,dri:82,def:48,phy:69},
+  {n:"Sofyan Amrabat",ovr:81,pos:"CDM",club:"Fiorentina",nat:"Morocco",pac:68,sho:62,pas:76,dri:72,def:82,phy:83},
+  {n:"Dominik Szoboszlai",ovr:82,pos:"CM",club:"Liverpool",nat:"Hungary",pac:83,sho:79,pas:81,dri:84,def:58,phy:77},
+  {n:"Rúben Neves",ovr:82,pos:"CDM",club:"Al-Hilal",nat:"Portugal",pac:65,sho:74,pas:85,dri:78,def:80,phy:78},
+  {n:"Youri Tielemans",ovr:82,pos:"CM",club:"Aston Villa",nat:"Belgium",pac:67,sho:77,pas:84,dri:81,def:75,phy:73},
+  {n:"Carlos Soler",ovr:80,pos:"CM",club:"PSG",nat:"Spain",pac:73,sho:76,pas:80,dri:79,def:67,phy:74},
+  {n:"Arthur Melo",ovr:79,pos:"CM",club:"Juventus",nat:"Brazil",pac:61,sho:67,pas:84,dri:83,def:62,phy:67},
+  {n:"Leandro Paredes",ovr:80,pos:"CDM",club:"Roma",nat:"Argentina",pac:64,sho:68,pas:83,dri:75,def:75,phy:70},
+  {n:"Aymeric Laporte",ovr:83,pos:"CB",club:"Al-Nassr",nat:"Spain",pac:70,sho:54,pas:78,dri:70,def:86,phy:82},
+  {n:"Pierre-Emile Højbjerg",ovr:81,pos:"CDM",club:"Atlético Madrid",nat:"Denmark",pac:66,sho:71,pas:80,dri:74,def:83,phy:82},
+  {n:"Weston McKennie",ovr:79,pos:"CM",club:"Juventus",nat:"USA",pac:77,sho:72,pas:73,dri:74,def:72,phy:83},
+  {n:"Rodrigo De Paul",ovr:82,pos:"CM",club:"Atlético Madrid",nat:"Argentina",pac:75,sho:74,pas:83,dri:81,def:71,phy:80},
+  {n:"Kieran Trippier",ovr:83,pos:"RB",club:"Newcastle",nat:"England",pac:73,sho:71,pas:85,dri:74,def:81,phy:72},
+  {n:"Harvey Elliott",ovr:79,pos:"CM",club:"Liverpool",nat:"England",pac:79,sho:74,pas:78,dri:83,def:46,phy:64},
+  {n:"Ryan Gravenberch",ovr:82,pos:"CM",club:"Liverpool",nat:"Netherlands",pac:80,sho:72,pas:80,dri:80,def:72,phy:81},
+
+  // ─── Defenders ───
+  {n:"Virgil van Dijk",ovr:89,pos:"CB",club:"Liverpool",nat:"Netherlands",pac:78,sho:60,pas:80,dri:71,def:91,phy:90},
+  {n:"Rúben Dias",ovr:88,pos:"CB",club:"Man City",nat:"Portugal",pac:73,sho:54,pas:70,dri:63,def:91,phy:87},
+  {n:"Marquinhos",ovr:87,pos:"CB",club:"PSG",nat:"Brazil",pac:74,sho:52,pas:73,dri:67,def:89,phy:84},
+  {n:"Trent Alexander-Arnold",ovr:87,pos:"RB",club:"Liverpool",nat:"England",pac:84,sho:71,pas:93,dri:81,def:67,phy:71},
+  {n:"Achraf Hakimi",ovr:86,pos:"RB",club:"PSG",nat:"Morocco",pac:96,sho:68,pas:76,dri:85,def:78,phy:76},
+  {n:"Theo Hernández",ovr:86,pos:"LB",club:"AC Milan",nat:"France",pac:93,sho:73,pas:74,dri:82,def:79,phy:81},
+  {n:"Josip Gvardiol",ovr:85,pos:"LB",club:"Man City",nat:"Croatia",pac:78,sho:60,pas:73,dri:74,def:85,phy:83},
+  {n:"Antonio Rüdiger",ovr:85,pos:"CB",club:"Real Madrid",nat:"Germany",pac:82,sho:52,pas:61,dri:65,def:87,phy:89},
+  {n:"William Saliba",ovr:85,pos:"CB",club:"Arsenal",nat:"France",pac:82,sho:44,pas:68,dri:70,def:87,phy:83},
+  {n:"Raphaël Varane",ovr:84,pos:"CB",club:"Man Utd",nat:"France",pac:76,sho:44,pas:67,dri:63,def:87,phy:82},
+  {n:"Jules Koundé",ovr:85,pos:"RB",club:"Barcelona",nat:"France",pac:84,sho:52,pas:72,dri:74,def:85,phy:79},
+  {n:"Benjamin Pavard",ovr:83,pos:"CB",club:"Inter Milan",nat:"France",pac:77,sho:52,pas:71,dri:70,def:83,phy:79},
+  {n:"Dayot Upamecano",ovr:84,pos:"CB",club:"Bayern Munich",nat:"France",pac:81,sho:43,pas:65,dri:67,def:84,phy:85},
+  {n:"Ferland Mendy",ovr:83,pos:"LB",club:"Real Madrid",nat:"France",pac:92,sho:52,pas:68,dri:76,def:82,phy:80},
+  {n:"Lucas Hernández",ovr:83,pos:"LB",club:"PSG",nat:"France",pac:79,sho:44,pas:69,dri:70,def:83,phy:82},
+  {n:"Ben Chilwell",ovr:81,pos:"LB",club:"Chelsea",nat:"England",pac:81,sho:60,pas:75,dri:73,def:78,phy:73},
+  {n:"Kyle Walker",ovr:83,pos:"RB",club:"Man City",nat:"England",pac:96,sho:57,pas:72,dri:77,def:80,phy:79},
+  {n:"João Cancelo",ovr:84,pos:"RB",club:"Barcelona",nat:"Portugal",pac:86,sho:64,pas:82,dri:83,def:80,phy:72},
+  {n:"Andrew Robertson",ovr:84,pos:"LB",club:"Liverpool",nat:"Scotland",pac:85,sho:59,pas:83,dri:75,def:82,phy:77},
+  {n:"Reece James",ovr:84,pos:"RB",club:"Chelsea",nat:"England",pac:84,sho:66,pas:80,dri:78,def:82,phy:80},
+  {n:"Presnel Kimpembe",ovr:81,pos:"CB",club:"PSG",nat:"France",pac:74,sho:40,pas:58,dri:58,def:82,phy:82},
+  {n:"Ezri Konsa",ovr:81,pos:"CB",club:"Aston Villa",nat:"England",pac:76,sho:42,pas:61,dri:62,def:81,phy:80},
+  {n:"Tyrone Mings",ovr:79,pos:"CB",club:"Aston Villa",nat:"England",pac:68,sho:39,pas:60,dri:57,def:80,phy:84},
+  {n:"Nathan Collins",ovr:80,pos:"CB",club:"Brentford",nat:"Ireland",pac:75,sho:41,pas:60,dri:61,def:80,phy:82},
+  {n:"Niklas Süle",ovr:82,pos:"CB",club:"Dortmund",nat:"Germany",pac:74,sho:44,pas:64,dri:64,def:83,phy:86},
+  {n:"Mats Hummels",ovr:83,pos:"CB",club:"Dortmund",nat:"Germany",pac:63,sho:47,pas:75,dri:67,def:86,phy:78},
+  {n:"Leonardo Bonucci",ovr:81,pos:"CB",club:"Union Berlin",nat:"Italy",pac:63,sho:44,pas:72,dri:64,def:84,phy:77},
+  {n:"Giorgio Chiellini",ovr:80,pos:"CB",club:"LAFC",nat:"Italy",pac:61,sho:40,pas:65,dri:60,def:85,phy:80},
+  {n:"Alessandro Bastoni",ovr:85,pos:"CB",club:"Inter Milan",nat:"Italy",pac:72,sho:54,pas:78,dri:72,def:85,phy:79},
+  {n:"Stefan de Vrij",ovr:82,pos:"CB",club:"Inter Milan",nat:"Netherlands",pac:67,sho:42,pas:71,dri:63,def:83,phy:78},
+  {n:"Thiago Silva",ovr:82,pos:"CB",club:"Fluminense",nat:"Brazil",pac:62,sho:43,pas:72,dri:66,def:86,phy:73},
+  {n:"Kalidou Koulibaly",ovr:83,pos:"CB",club:"Al-Hilal",nat:"Senegal",pac:79,sho:46,pas:64,dri:65,def:86,phy:87},
+  {n:"Sérgio Reguilón",ovr:80,pos:"LB",club:"Atlético Madrid",nat:"Spain",pac:82,sho:52,pas:70,dri:74,def:78,phy:73},
+  {n:"Alex Grimaldo",ovr:83,pos:"LB",club:"Bayer Leverkusen",nat:"Spain",pac:86,sho:68,pas:80,dri:79,def:78,phy:69},
+  {n:"Pau Torres",ovr:83,pos:"CB",club:"Aston Villa",nat:"Spain",pac:74,sho:46,pas:74,dri:68,def:84,phy:80},
+  {n:"Eric Garcia",ovr:79,pos:"CB",club:"Girona",nat:"Spain",pac:68,sho:40,pas:72,dri:66,def:81,phy:73},
+  {n:"Dedryck Boyata",ovr:76,pos:"CB",club:"Club Brugge",nat:"Belgium",pac:68,sho:38,pas:58,dri:54,def:78,phy:80},
+  {n:"Malang Sarr",ovr:76,pos:"CB",club:"Monaco",nat:"France",pac:76,sho:36,pas:60,dri:60,def:77,phy:77},
+  {n:"Issa Diop",ovr:79,pos:"CB",club:"Fulham",nat:"France",pac:75,sho:38,pas:56,dri:56,def:79,phy:84},
+  {n:"Tosin Adarabioyo",ovr:78,pos:"CB",club:"Chelsea",nat:"England",pac:73,sho:39,pas:60,dri:58,def:79,phy:83},
+  {n:"Wesley Fofana",ovr:81,pos:"CB",club:"Chelsea",nat:"France",pac:80,sho:42,pas:64,dri:66,def:82,phy:81},
+  {n:"Konstantinos Mavropanos",ovr:79,pos:"CB",club:"West Ham",nat:"Greece",pac:74,sho:40,pas:58,dri:59,def:79,phy:83},
+  {n:"Emerson Royal",ovr:77,pos:"RB",club:"AC Milan",nat:"Brazil",pac:82,sho:52,pas:67,dri:70,def:75,phy:77},
+  {n:"Diogo Dalot",ovr:81,pos:"RB",club:"Man Utd",nat:"Portugal",pac:84,sho:60,pas:75,dri:77,def:77,phy:71},
+  {n:"Denzel Dumfries",ovr:82,pos:"RB",club:"Inter Milan",nat:"Netherlands",pac:86,sho:62,pas:71,dri:73,def:79,phy:84},
+  {n:"Timothy Castagne",ovr:79,pos:"RB",club:"Fulham",nat:"Belgium",pac:79,sho:52,pas:71,dri:72,def:77,phy:76},
+  {n:"Álvaro Odriozola",ovr:77,pos:"RB",club:"Real Sociedad",nat:"Spain",pac:83,sho:46,pas:70,dri:72,def:74,phy:72},
+  {n:"Noussair Mazraoui",ovr:81,pos:"RB",club:"Bayern Munich",nat:"Morocco",pac:79,sho:56,pas:74,dri:77,def:79,phy:75},
+  {n:"Dani Carvajal",ovr:85,pos:"RB",club:"Real Madrid",nat:"Spain",pac:79,sho:60,pas:80,dri:76,def:85,phy:77},
+  {n:"Jordi Alba",ovr:82,pos:"LB",club:"Inter Miami",nat:"Spain",pac:82,sho:56,pas:82,dri:77,def:79,phy:68},
+  {n:"Alphonso Davies",ovr:83,pos:"LB",club:"Bayern Munich",nat:"Canada",pac:97,sho:54,pas:72,dri:80,def:79,phy:72},
+  {n:"Nuno Mendes",ovr:82,pos:"LB",club:"PSG",nat:"Portugal",pac:90,sho:52,pas:73,dri:79,def:79,phy:75},
+  {n:"Destiny Udogie",ovr:81,pos:"LB",club:"Tottenham",nat:"Italy",pac:85,sho:55,pas:72,dri:74,def:78,phy:77},
+  {n:"Pedro Porro",ovr:81,pos:"RB",club:"Tottenham",nat:"Spain",pac:84,sho:56,pas:73,dri:74,def:77,phy:73},
+  {n:"Quentin Merlin",ovr:78,pos:"LB",club:"Nantes",nat:"France",pac:80,sho:48,pas:67,dri:72,def:75,phy:71},
+  {n:"Pervis Estupiñán",ovr:80,pos:"LB",club:"Brighton",nat:"Ecuador",pac:88,sho:54,pas:72,dri:74,def:77,phy:75},
+  {n:"Matty Cash",ovr:80,pos:"RB",club:"Aston Villa",nat:"Poland",pac:79,sho:52,pas:70,dri:71,def:79,phy:78},
+  {n:"Tino Livramento",ovr:78,pos:"RB",club:"Newcastle",nat:"England",pac:85,sho:50,pas:68,dri:72,def:74,phy:70},
+  {n:"Yan Couto",ovr:78,pos:"RB",club:"Girona",nat:"Brazil",pac:84,sho:55,pas:71,dri:74,def:74,phy:70},
+  {n:"Malo Gusto",ovr:79,pos:"RB",club:"Chelsea",nat:"France",pac:86,sho:52,pas:70,dri:73,def:76,phy:72},
+  {n:"Ben White",ovr:82,pos:"RB",club:"Arsenal",nat:"England",pac:80,sho:55,pas:74,dri:74,def:81,phy:76},
+  {n:"Gabriel Magalhães",ovr:84,pos:"CB",club:"Arsenal",nat:"Brazil",pac:75,sho:47,pas:66,dri:63,def:85,phy:83},
+  {n:"Ibrahima Konaté",ovr:83,pos:"CB",club:"Liverpool",nat:"France",pac:80,sho:44,pas:64,dri:64,def:84,phy:86},
+  {n:"Joël Matip",ovr:81,pos:"CB",club:"Liverpool",nat:"Cameroon",pac:70,sho:41,pas:67,dri:65,def:83,phy:80},
+  {n:"Dan Burn",ovr:77,pos:"CB",club:"Newcastle",nat:"England",pac:64,sho:38,pas:60,dri:56,def:78,phy:81},
+
+  // ─── Goalkeepers ───
+  {n:"Thibaut Courtois",ovr:90,pos:"GK",club:"Real Madrid",nat:"Belgium",pac:38,sho:18,pas:43,dri:30,def:15,phy:77},
+  {n:"Alisson Becker",ovr:90,pos:"GK",club:"Liverpool",nat:"Brazil",pac:42,sho:14,pas:48,dri:34,def:14,phy:73},
+  {n:"Manuel Neuer",ovr:88,pos:"GK",club:"Bayern Munich",nat:"Germany",pac:56,sho:14,pas:57,dri:50,def:15,phy:79},
+  {n:"Marc-André ter Stegen",ovr:88,pos:"GK",club:"Barcelona",nat:"Germany",pac:47,sho:18,pas:55,dri:44,def:13,phy:73},
+  {n:"Mike Maignan",ovr:87,pos:"GK",club:"AC Milan",nat:"France",pac:51,sho:13,pas:47,dri:40,def:14,phy:75},
+  {n:"Gianluigi Donnarumma",ovr:87,pos:"GK",club:"PSG",nat:"Italy",pac:48,sho:15,pas:46,dri:38,def:14,phy:78},
+  {n:"Ederson",ovr:87,pos:"GK",club:"Man City",nat:"Brazil",pac:60,sho:18,pas:64,dri:50,def:13,phy:73},
+  {n:"Jan Oblak",ovr:88,pos:"GK",club:"Atlético Madrid",nat:"Slovenia",pac:43,sho:15,pas:45,dri:38,def:15,phy:74},
+  {n:"David Raya",ovr:84,pos:"GK",club:"Arsenal",nat:"Spain",pac:46,sho:15,pas:46,dri:38,def:13,phy:70},
+  {n:"Gregor Kobel",ovr:84,pos:"GK",club:"Dortmund",nat:"Switzerland",pac:47,sho:14,pas:45,dri:38,def:14,phy:74},
+  {n:"Keylor Navas",ovr:83,pos:"GK",club:"PSG",nat:"Costa Rica",pac:42,sho:13,pas:42,dri:35,def:12,phy:72},
+  {n:"Wojciech Szczęsny",ovr:84,pos:"GK",club:"Barcelona",nat:"Poland",pac:43,sho:13,pas:44,dri:36,def:13,phy:73},
+  {n:"André Onana",ovr:83,pos:"GK",club:"Man Utd",nat:"Cameroon",pac:47,sho:15,pas:47,dri:38,def:12,phy:75},
+  {n:"Lukáš Hrádecký",ovr:82,pos:"GK",club:"Bayer Leverkusen",nat:"Finland",pac:44,sho:14,pas:43,dri:36,def:13,phy:73},
+  {n:"Rui Patrício",ovr:82,pos:"GK",club:"Roma",nat:"Portugal",pac:43,sho:13,pas:40,dri:34,def:13,phy:71},
+  {n:"Jordan Pickford",ovr:82,pos:"GK",club:"Everton",nat:"England",pac:48,sho:14,pas:42,dri:38,def:13,phy:71},
+  {n:"Hugo Lloris",ovr:83,pos:"GK",club:"Tottenham",nat:"France",pac:49,sho:14,pas:44,dri:38,def:14,phy:72},
+  {n:"Kasper Schmeichel",ovr:80,pos:"GK",club:"Anderlecht",nat:"Denmark",pac:44,sho:13,pas:42,dri:35,def:13,phy:72},
+  {n:"Yann Sommer",ovr:83,pos:"GK",club:"Inter Milan",nat:"Switzerland",pac:46,sho:14,pas:46,dri:40,def:13,phy:70},
+  {n:"Unai Simón",ovr:82,pos:"GK",club:"Athletic Bilbao",nat:"Spain",pac:48,sho:14,pas:46,dri:39,def:13,phy:72},
+  {n:"Emiliano Martínez",ovr:87,pos:"GK",club:"Aston Villa",nat:"Argentina",pac:48,sho:17,pas:46,dri:38,def:15,phy:79},
+  {n:"Robert Sánchez",ovr:82,pos:"GK",club:"Chelsea",nat:"Spain",pac:50,sho:14,pas:46,dri:38,def:13,phy:76},
+  {n:"Matz Sels",ovr:79,pos:"GK",club:"Strasbourg",nat:"Belgium",pac:44,sho:13,pas:41,dri:34,def:12,phy:71},
+  {n:"Nick Pope",ovr:82,pos:"GK",club:"Newcastle",nat:"England",pac:44,sho:14,pas:43,dri:35,def:13,phy:76},
+  {n:"Dean Henderson",ovr:80,pos:"GK",club:"Crystal Palace",nat:"England",pac:46,sho:14,pas:42,dri:36,def:12,phy:74},
+  {n:"Ørjan Nyland",ovr:77,pos:"GK",club:"Inter Milan",nat:"Norway",pac:42,sho:12,pas:39,dri:32,def:11,phy:73},
+  {n:"Karl Hein",ovr:76,pos:"GK",club:"Arsenal",nat:"Estonia",pac:44,sho:13,pas:40,dri:33,def:12,phy:72},
+  {n:"Bart Verbruggen",ovr:80,pos:"GK",club:"Brighton",nat:"Netherlands",pac:49,sho:14,pas:44,dri:38,def:12,phy:73},
+  {n:"Giorgi Mamardashvili",ovr:81,pos:"GK",club:"Valencia",nat:"Georgia",pac:52,sho:14,pas:45,dri:39,def:13,phy:78},
+
+  // ─── More depth players ───
+  {n:"Thiago Motta",ovr:75,pos:"CM",club:"Bologna",nat:"Italy",pac:58,sho:60,pas:76,dri:72,def:66,phy:68},
+  {n:"Takumi Minamino",ovr:78,pos:"LW",club:"Monaco",nat:"Japan",pac:86,sho:77,pas:75,dri:79,def:45,phy:69},
+  {n:"Karim Benzema",ovr:86,pos:"ST",club:"Al-Ittihad",nat:"France",pac:74,sho:90,pas:81,dri:88,def:37,phy:78},
+  {n:"Gonçalo Ramos",ovr:82,pos:"ST",club:"PSG",nat:"Portugal",pac:79,sho:82,pas:72,dri:77,def:36,phy:77},
+  {n:"Marcus Thuram",ovr:83,pos:"ST",club:"Inter Milan",nat:"France",pac:86,sho:80,pas:72,dri:79,def:40,phy:82},
+  {n:"Lautaro Martínez",ovr:87,pos:"ST",club:"Inter Milan",nat:"Argentina",pac:81,sho:87,pas:75,dri:85,def:44,phy:79},
+  {n:"Richarlison",ovr:82,pos:"ST",club:"Tottenham",nat:"Brazil",pac:84,sho:81,pas:68,dri:79,def:40,phy:82},
+  {n:"Divock Origi",ovr:76,pos:"ST",club:"Nottm Forest",nat:"Belgium",pac:80,sho:76,pas:64,dri:73,def:30,phy:74},
+  {n:"Tammy Abraham",ovr:79,pos:"ST",club:"Roma",nat:"England",pac:81,sho:79,pas:62,dri:76,def:34,phy:80},
+  {n:"Danny Welbeck",ovr:76,pos:"ST",club:"Brighton",nat:"England",pac:83,sho:74,pas:67,dri:72,def:34,phy:76},
+  {n:"Sardar Azmoun",ovr:79,pos:"ST",club:"Bayer Leverkusen",nat:"Iran",pac:74,sho:79,pas:70,dri:76,def:35,phy:74},
+  {n:"Folarin Balogun",ovr:78,pos:"ST",club:"Monaco",nat:"USA",pac:83,sho:77,pas:68,dri:77,def:31,phy:73},
+  {n:"Neal Maupay",ovr:76,pos:"ST",club:"Brentford",nat:"France",pac:80,sho:77,pas:65,dri:73,def:38,phy:73},
+  {n:"Emmanuel Dennis",ovr:75,pos:"ST",club:"Nottm Forest",nat:"Nigeria",pac:84,sho:73,pas:61,dri:74,def:28,phy:74},
+  {n:"Breel Embolo",ovr:78,pos:"ST",club:"Monaco",nat:"Switzerland",pac:82,sho:76,pas:64,dri:75,def:33,phy:81},
+  {n:"Callum Wilson",ovr:79,pos:"ST",club:"Newcastle",nat:"England",pac:80,sho:80,pas:65,dri:75,def:30,phy:76},
+  {n:"Chris Wood",ovr:76,pos:"ST",club:"Nottm Forest",nat:"New Zealand",pac:72,sho:77,pas:59,dri:67,def:34,phy:84},
+  {n:"Ivan Toney",ovr:81,pos:"ST",club:"Brentford",nat:"England",pac:74,sho:82,pas:69,dri:74,def:37,phy:84},
+  {n:"Niclas Füllkrug",ovr:81,pos:"ST",club:"Dortmund",nat:"Germany",pac:69,sho:83,pas:67,dri:71,def:36,phy:83},
+  {n:"Youssef En-Nesyri",ovr:80,pos:"ST",club:"Sevilla",nat:"Morocco",pac:79,sho:80,pas:64,dri:74,def:32,phy:78},
+  {n:"Raúl de Tomás",ovr:78,pos:"ST",club:"Espanyol",nat:"Spain",pac:70,sho:80,pas:67,dri:74,def:35,phy:74},
+  {n:"Arnaut Danjuma",ovr:79,pos:"LW",club:"Villarreal",nat:"Netherlands",pac:90,sho:76,pas:70,dri:82,def:30,phy:72},
+  {n:"Kingsley Coman",ovr:83,pos:"LW",club:"Bayern Munich",nat:"France",pac:91,sho:79,pas:75,dri:86,def:34,phy:71},
+  {n:"Riyad Mahrez",ovr:84,pos:"RW",club:"Al-Ahli",nat:"Algeria",pac:82,sho:84,pas:80,dri:89,def:30,phy:65},
+  {n:"Hakim Ziyech",ovr:81,pos:"RW",club:"Galatasaray",nat:"Morocco",pac:77,sho:79,pas:82,dri:84,def:34,phy:65},
+  {n:"Serge Gnabry",ovr:81,pos:"RW",club:"Bayern Munich",nat:"Germany",pac:87,sho:79,pas:72,dri:84,def:33,phy:72},
+  {n:"Takefusa Kubo",ovr:82,pos:"RW",club:"Real Sociedad",nat:"Japan",pac:82,sho:76,pas:77,dri:87,def:36,phy:65},
+  {n:"Bernard",ovr:75,pos:"LW",club:"Everton",nat:"Brazil",pac:84,sho:71,pas:74,dri:83,def:28,phy:57},
+  {n:"Wilfried Zaha",ovr:81,pos:"LW",club:"Galatasaray",nat:"Ivory Coast",pac:90,sho:76,pas:70,dri:84,def:28,phy:72},
+  {n:"Nuno Santos",ovr:77,pos:"LW",club:"Sporting CP",nat:"Portugal",pac:87,sho:72,pas:70,dri:77,def:38,phy:71},
+  {n:"Alex Iwobi",ovr:78,pos:"CM",club:"Fulham",nat:"Nigeria",pac:82,sho:70,pas:75,dri:79,def:52,phy:74},
+  {n:"Bojan Miovski",ovr:77,pos:"ST",club:"Aberdeen",nat:"N. Macedonia",pac:73,sho:78,pas:62,dri:74,def:30,phy:73},
+  {n:"Santiago Giménez",ovr:80,pos:"ST",club:"Feyenoord",nat:"Mexico",pac:76,sho:80,pas:66,dri:74,def:32,phy:76},
+  {n:"Cyriel Dessers",ovr:76,pos:"ST",club:"Rangers",nat:"Nigeria",pac:79,sho:76,pas:60,dri:71,def:28,phy:74},
+  {n:"Lyle Foster",ovr:75,pos:"ST",club:"Burnley",nat:"South Africa",pac:81,sho:74,pas:60,dri:72,def:28,phy:77},
+  {n:"Sébastien Haller",ovr:79,pos:"ST",club:"Dortmund",nat:"Ivory Coast",pac:74,sho:79,pas:66,dri:70,def:35,phy:82},
+  {n:"Boulaye Dia",ovr:80,pos:"ST",club:"Lazio",nat:"Senegal",pac:82,sho:79,pas:68,dri:77,def:30,phy:74},
+  {n:"Simon Banza",ovr:77,pos:"ST",club:"Sporting Braga",nat:"DR Congo",pac:79,sho:77,pas:60,dri:73,def:28,phy:78},
+  {n:"Evan Ferguson",ovr:78,pos:"ST",club:"Brighton",nat:"Ireland",pac:72,sho:79,pas:64,dri:72,def:30,phy:78},
+  {n:"Levi Colwill",ovr:79,pos:"CB",club:"Chelsea",nat:"England",pac:78,sho:40,pas:66,dri:65,def:79,phy:79},
+  {n:"Konstantinos Tsimikas",ovr:80,pos:"LB",club:"Liverpool",nat:"Greece",pac:83,sho:54,pas:74,dri:74,def:77,phy:72},
+  {n:"Aaron Wan-Bissaka",ovr:79,pos:"RB",club:"Man Utd",nat:"England",pac:78,sho:46,pas:62,dri:69,def:81,phy:74},
+  {n:"Max Kilman",ovr:80,pos:"CB",club:"Wolves",nat:"England",pac:73,sho:40,pas:62,dri:62,def:81,phy:81},
+  {n:"Conor Coady",ovr:78,pos:"CB",club:"Everton",nat:"England",pac:68,sho:38,pas:64,dri:58,def:79,phy:78},
+  {n:"Shane Duffy",ovr:75,pos:"CB",club:"Fulham",nat:"Ireland",pac:62,sho:37,pas:55,dri:52,def:77,phy:83},
+  {n:"Robin Koch",ovr:79,pos:"CB",club:"Leeds",nat:"Germany",pac:72,sho:40,pas:63,dri:61,def:79,phy:79},
+  {n:"Caglar Soyuncu",ovr:79,pos:"CB",club:"Atlético Madrid",nat:"Turkey",pac:74,sho:40,pas:61,dri:60,def:80,phy:80},
+  {n:"Axel Disasi",ovr:79,pos:"CB",club:"Monaco",nat:"France",pac:78,sho:40,pas:62,dri:62,def:79,phy:82},
+  {n:"Wout Faes",ovr:78,pos:"CB",club:"Leicester",nat:"Belgium",pac:72,sho:39,pas:60,dri:59,def:79,phy:80},
+  {n:"Dara O'Shea",ovr:76,pos:"CB",club:"Burnley",nat:"Ireland",pac:71,sho:38,pas:58,dri:56,def:77,phy:79},
+  {n:"Scott McKenna",ovr:76,pos:"CB",club:"Nottm Forest",nat:"Scotland",pac:73,sho:37,pas:57,dri:55,def:77,phy:79},
+  {n:"Abdoulaye Touré",ovr:76,pos:"CDM",club:"Nantes",nat:"Guinea",pac:69,sho:58,pas:72,dri:69,def:76,phy:78},
+  {n:"Hannes Wolf",ovr:75,pos:"CM",club:"RB Leipzig",nat:"Austria",pac:74,sho:67,pas:75,dri:75,def:60,phy:71},
+  {n:"Ellyes Skhiri",ovr:78,pos:"CM",club:"FC Köln",nat:"Tunisia",pac:66,sho:65,pas:74,dri:72,def:76,phy:78},
+  {n:"Jordan Veretout",ovr:80,pos:"CM",club:"Roma",nat:"France",pac:72,sho:76,pas:79,dri:78,def:70,phy:75},
+  {n:"Douglas Luiz",ovr:82,pos:"CM",club:"Aston Villa",nat:"Brazil",pac:67,sho:75,pas:80,dri:77,def:78,phy:78},
+  {n:"Tom Cairney",ovr:78,pos:"CM",club:"Fulham",nat:"Scotland",pac:64,sho:72,pas:80,dri:75,def:57,phy:70},
+  {n:"Tyrick Mitchell",ovr:76,pos:"LB",club:"Crystal Palace",nat:"England",pac:81,sho:46,pas:64,dri:68,def:74,phy:72},
+  {n:"Cheikhou Kouyaté",ovr:77,pos:"CM",club:"Crystal Palace",nat:"Senegal",pac:70,sho:60,pas:70,dri:67,def:75,phy:82},
+  {n:"James Ward-Prowse",ovr:81,pos:"CM",club:"West Ham",nat:"England",pac:63,sho:77,pas:86,dri:74,def:68,phy:73},
+  {n:"Lucas Torreira",ovr:80,pos:"CDM",club:"Galatasaray",nat:"Uruguay",pac:65,sho:66,pas:78,dri:74,def:81,phy:72},
+  {n:"Maxime Lopez",ovr:77,pos:"CM",club:"Sassuolo",nat:"France",pac:68,sho:64,pas:78,dri:79,def:62,phy:63},
+  {n:"Adrien Tamèze",ovr:76,pos:"CM",club:"Nice",nat:"France",pac:72,sho:60,pas:73,dri:71,def:73,phy:76},
+  {n:"Mattia Zaccagni",ovr:81,pos:"LW",club:"Lazio",nat:"Italy",pac:82,sho:79,pas:74,dri:81,def:34,phy:71},
+  {n:"Pol Lirola",ovr:75,pos:"RB",club:"Marseille",nat:"Spain",pac:83,sho:50,pas:65,dri:68,def:73,phy:73},
+  {n:"Nemanja Gudelj",ovr:78,pos:"CDM",club:"Sevilla",nat:"Serbia",pac:62,sho:60,pas:76,dri:68,def:80,phy:78},
+  {n:"Przemysław Frankowski",ovr:77,pos:"RW",club:"Lens",nat:"Poland",pac:84,sho:70,pas:72,dri:76,def:40,phy:68},
+  {n:"Florian Thauvin",ovr:79,pos:"RW",club:"Tigres",nat:"France",pac:78,sho:77,pas:77,dri:82,def:30,phy:67},
+  {n:"Wissam Ben Yedder",ovr:80,pos:"ST",club:"Monaco",nat:"France",pac:78,sho:83,pas:72,dri:81,def:30,phy:66},
+  {n:"Aleksandar Kolarov",ovr:73,pos:"LB",club:"Roma",nat:"Serbia",pac:62,sho:64,pas:71,dri:63,def:73,phy:74},
+  {n:"Luuk de Jong",ovr:78,pos:"ST",club:"PSV",nat:"Netherlands",pac:70,sho:77,pas:65,dri:68,def:38,phy:80},
+  {n:"Hwang Hee-chan",ovr:79,pos:"ST",club:"Wolves",nat:"South Korea",pac:87,sho:76,pas:67,dri:76,def:38,phy:73},
+  {n:"Emmanuel Adebayor",ovr:74,pos:"ST",club:"Free Agent",nat:"Togo",pac:70,sho:73,pas:58,dri:66,def:28,phy:80},
+  {n:"Kenneth Zohore",ovr:73,pos:"ST",club:"St. Mirren",nat:"Denmark",pac:74,sho:72,pas:56,dri:67,def:26,phy:79},
+  {n:"George Dobson",ovr:70,pos:"CM",club:"Portsmouth",nat:"England",pac:66,sho:60,pas:70,dri:66,def:68,phy:73},
+  {n:"Emile Smith Rowe",ovr:79,pos:"CAM",club:"Arsenal",nat:"England",pac:76,sho:76,pas:78,dri:82,def:40,phy:67},
+  {n:"Cole Palmer",ovr:85,pos:"CAM",club:"Chelsea",nat:"England",pac:79,sho:84,pas:82,dri:88,def:46,phy:68},
+  {n:"Khvicha Kvaratskhelia",ovr:87,pos:"LW",club:"Napoli",nat:"Georgia",pac:91,sho:82,pas:78,dri:90,def:29,phy:70},
+  {n:"Enzo Le Fée",ovr:78,pos:"CM",club:"Rennes",nat:"France",pac:74,sho:68,pas:78,dri:77,def:63,phy:70},
+  {n:"Bilal El Khannouss",ovr:76,pos:"CM",club:"Genk",nat:"Morocco",pac:78,sho:68,pas:76,dri:79,def:55,phy:67},
+  {n:"Paxten Aaronson",ovr:75,pos:"CM",club:"Eintracht Frankfurt",nat:"USA",pac:78,sho:68,pas:74,dri:76,def:56,phy:68},
+  {n:"Ibrahim Sangaré",ovr:81,pos:"CDM",club:"PSV",nat:"Ivory Coast",pac:72,sho:62,pas:75,dri:73,def:82,phy:85},
+  {n:"Brenden Aaronson",ovr:77,pos:"CM",club:"Leeds",nat:"USA",pac:79,sho:70,pas:75,dri:77,def:58,phy:72},
+  {n:"Joe Rodon",ovr:78,pos:"CB",club:"Tottenham",nat:"Wales",pac:72,sho:38,pas:60,dri:59,def:79,phy:79},
+  {n:"Ben Godfrey",ovr:77,pos:"CB",club:"Everton",nat:"England",pac:80,sho:38,pas:58,dri:61,def:77,phy:80},
+  {n:"Anel Ahmedhodžić",ovr:77,pos:"CB",club:"Sheffield Utd",nat:"Bosnia",pac:75,sho:38,pas:59,dri:60,def:78,phy:80},
+  {n:"Abdou Diallo",ovr:79,pos:"CB",club:"RB Leipzig",nat:"Senegal",pac:79,sho:39,pas:63,dri:63,def:79,phy:80},
+  {n:"Ozan Kabak",ovr:77,pos:"CB",club:"Norwich",nat:"Turkey",pac:72,sho:38,pas:58,dri:58,def:78,phy:79},
+  {n:"Edson Álvarez",ovr:81,pos:"CDM",club:"West Ham",nat:"Mexico",pac:70,sho:58,pas:72,dri:70,def:83,phy:80},
+  {n:"Idrissa Gueye",ovr:80,pos:"CDM",club:"Everton",nat:"Senegal",pac:73,sho:62,pas:73,dri:73,def:81,phy:79},
+  {n:"André Zambo Anguissa",ovr:83,pos:"CM",club:"Napoli",nat:"Cameroon",pac:77,sho:66,pas:79,dri:77,def:78,phy:84},
+  {n:"Thomas Partey",ovr:84,pos:"CDM",club:"Arsenal",nat:"Ghana",pac:72,sho:64,pas:78,dri:76,def:85,phy:84},
+  {n:"Moussa Diaby",ovr:83,pos:"RW",club:"Aston Villa",nat:"France",pac:92,sho:79,pas:74,dri:84,def:28,phy:70},
+  {n:"Leon Bailey",ovr:79,pos:"RW",club:"Aston Villa",nat:"Jamaica",pac:90,sho:76,pas:70,dri:81,def:26,phy:68},
+  {n:"Emi Buendía",ovr:81,pos:"CAM",club:"Aston Villa",nat:"Argentina",pac:73,sho:78,pas:80,dri:84,def:40,phy:67},
+  {n:"Ollie Watkins",ovr:84,pos:"ST",club:"Aston Villa",nat:"England",pac:87,sho:82,pas:73,dri:80,def:39,phy:75},
+  {n:"John McGinn",ovr:82,pos:"CM",club:"Aston Villa",nat:"Scotland",pac:74,sho:76,pas:80,dri:77,def:71,phy:79},
+  {n:"Jacob Ramsey",ovr:78,pos:"CM",club:"Aston Villa",nat:"England",pac:77,sho:73,pas:74,dri:78,def:62,phy:74},
+  {n:"Morgan Gibbs-White",ovr:80,pos:"CAM",club:"Nottm Forest",nat:"England",pac:75,sho:76,pas:78,dri:81,def:43,phy:68},
+  {n:"Brennan Johnson",ovr:79,pos:"RW",club:"Nottm Forest",nat:"Wales",pac:87,sho:74,pas:68,dri:78,def:30,phy:70},
+  {n:"Emmanuel Agbadou",ovr:78,pos:"CB",club:"Reims",nat:"Belgium",pac:75,sho:38,pas:60,dri:60,def:79,phy:80},
+  {n:"Nayef Aguerd",ovr:80,pos:"CB",club:"West Ham",nat:"Morocco",pac:74,sho:40,pas:66,dri:63,def:81,phy:79},
+  {n:"Axel Disasi",ovr:79,pos:"CB",club:"Monaco",nat:"France",pac:78,sho:40,pas:62,dri:62,def:79,phy:82},
+  {n:"Willian",ovr:77,pos:"RW",club:"Fulham",nat:"Brazil",pac:77,sho:74,pas:75,dri:81,def:34,phy:65},
+  {n:"Pierre-Emerick Aubameyang",ovr:82,pos:"ST",club:"Marseille",nat:"Gabon",pac:88,sho:83,pas:68,dri:81,def:33,phy:76},
+  {n:"André Silva",ovr:80,pos:"ST",club:"RB Leipzig",nat:"Portugal",pac:76,sho:82,pas:67,dri:75,def:33,phy:75},
+  {n:"Oleksandr Zinchenko",ovr:81,pos:"LB",club:"Arsenal",nat:"Ukraine",pac:76,sho:60,pas:82,dri:78,def:77,phy:66},
+  {n:"Gabriel Martinelli",ovr:84,pos:"LW",club:"Arsenal",nat:"Brazil",pac:90,sho:80,pas:73,dri:83,def:32,phy:73},
+  {n:"Leandro Trossard",ovr:83,pos:"LW",club:"Arsenal",nat:"Belgium",pac:79,sho:81,pas:79,dri:83,def:42,phy:71},
+  {n:"Eddie Nketiah",ovr:79,pos:"ST",club:"Arsenal",nat:"England",pac:84,sho:79,pas:66,dri:76,def:34,phy:73},
+  {n:"Fabio Carvalho",ovr:76,pos:"CM",club:"Liverpool",nat:"Portugal",pac:76,sho:71,pas:74,dri:79,def:47,phy:65},
+  {n:"Cody Gakpo",ovr:83,pos:"LW",club:"Liverpool",nat:"Netherlands",pac:88,sho:81,pas:77,dri:83,def:34,phy:78},
+  {n:"Ibrahima Konaté",ovr:83,pos:"CB",club:"Liverpool",nat:"France",pac:80,sho:44,pas:64,dri:64,def:84,phy:86},
+  {n:"Stefan Bajčetić",ovr:75,pos:"CDM",club:"Liverpool",nat:"Spain",pac:69,sho:60,pas:74,dri:73,def:75,phy:72},
+  {n:"James Milner",ovr:76,pos:"CM",club:"Liverpool",nat:"England",pac:71,sho:68,pas:78,dri:72,def:72,phy:74},
+  {n:"Naby Keïta",ovr:80,pos:"CM",club:"Werder Bremen",nat:"Guinea",pac:80,sho:72,pas:80,dri:83,def:68,phy:77},
+  {n:"Asmir Begović",ovr:74,pos:"GK",club:"Everton",nat:"Bosnia",pac:40,sho:12,pas:38,dri:32,def:11,phy:72},
+  {n:"Kamil Grabara",ovr:78,pos:"GK",club:"FC Copenhagen",nat:"Poland",pac:44,sho:13,pas:42,dri:35,def:12,phy:73},
+  {n:"Mathew Ryan",ovr:78,pos:"GK",club:"AZ Alkmaar",nat:"Australia",pac:44,sho:13,pas:41,dri:35,def:12,phy:70},
+  {n:"Stefan Ortega",ovr:79,pos:"GK",club:"Man City",nat:"Germany",pac:44,sho:14,pas:43,dri:36,def:12,phy:71},
+  {n:"Patrice Evra",ovr:72,pos:"LB",club:"Free Agent",nat:"France",pac:72,sho:50,pas:65,dri:66,def:75,phy:72},
+  {n:"Nuno Tavares",ovr:77,pos:"LB",club:"Arsenal",nat:"Portugal",pac:88,sho:50,pas:66,dri:72,def:70,phy:71},
+  {n:"Malick Thiaw",ovr:79,pos:"CB",club:"AC Milan",nat:"Germany",pac:77,sho:40,pas:60,dri:62,def:79,phy:83},
+  {n:"Fikayo Tomori",ovr:82,pos:"CB",club:"AC Milan",nat:"England",pac:84,sho:42,pas:63,dri:67,def:82,phy:82},
+  {n:"Pierre Kalulu",ovr:79,pos:"CB",club:"AC Milan",nat:"France",pac:82,sho:40,pas:61,dri:63,def:79,phy:79},
+  {n:"Davide Calabria",ovr:79,pos:"RB",club:"AC Milan",nat:"Italy",pac:78,sho:52,pas:71,dri:72,def:78,phy:73},
+  {n:"Alessandro Florenzi",ovr:78,pos:"RB",club:"AC Milan",nat:"Italy",pac:77,sho:58,pas:72,dri:73,def:76,phy:72},
+  {n:"Tijjani Reijnders",ovr:82,pos:"CM",club:"AC Milan",nat:"Netherlands",pac:76,sho:74,pas:80,dri:79,def:68,phy:76},
+  {n:"Ruben Loftus-Cheek",ovr:81,pos:"CM",club:"AC Milan",nat:"England",pac:77,sho:73,pas:77,dri:79,def:63,phy:82},
+  {n:"Samuel Chukwueze",ovr:79,pos:"RW",club:"AC Milan",nat:"Nigeria",pac:88,sho:74,pas:70,dri:81,def:28,phy:70},
+  {n:"Christian Pulisic",ovr:82,pos:"RW",club:"AC Milan",nat:"USA",pac:82,sho:77,pas:75,dri:83,def:37,phy:68},
+  {n:"Yunus Musah",ovr:78,pos:"CM",club:"AC Milan",nat:"USA",pac:80,sho:68,pas:74,dri:78,def:63,phy:74},
+  {n:"Rade Krunić",ovr:78,pos:"CM",club:"AC Milan",nat:"Bosnia",pac:70,sho:68,pas:76,dri:74,def:70,phy:75},
+  {n:"Noah Okafor",ovr:79,pos:"ST",club:"AC Milan",nat:"Switzerland",pac:89,sho:76,pas:68,dri:78,def:32,phy:74},
+  {n:"Olivier Giroud",ovr:82,pos:"ST",club:"LA Galaxy",nat:"France",pac:63,sho:83,pas:71,dri:74,def:38,phy:82},
+  {n:"Lorenzo Pellegrini",ovr:83,pos:"CAM",club:"Roma",nat:"Italy",pac:77,sho:79,pas:83,dri:82,def:57,phy:73},
+  {n:"Stephan El Shaarawy",ovr:79,pos:"LW",club:"Roma",nat:"Italy",pac:87,sho:77,pas:72,dri:82,def:30,phy:68},
+  {n:"Paulo Dybala",ovr:84,pos:"CAM",club:"Roma",nat:"Argentina",pac:77,sho:85,pas:82,dri:89,def:34,phy:68},
+  {n:"Romelu Lukaku",ovr:83,pos:"ST",club:"Napoli",nat:"Belgium",pac:79,sho:82,pas:65,dri:74,def:38,phy:91},
+  {n:"Giovanni Simeone",ovr:78,pos:"ST",club:"Napoli",nat:"Argentina",pac:81,sho:76,pas:62,dri:72,def:35,phy:77},
+  {n:"Khvicha Kvaratskhelia",ovr:87,pos:"LW",club:"Napoli",nat:"Georgia",pac:91,sho:82,pas:78,dri:90,def:29,phy:70},
+  {n:"Victor Osimhen",ovr:88,pos:"ST",club:"Napoli",nat:"Nigeria",pac:91,sho:87,pas:68,dri:82,def:36,phy:83},
+  {n:"Piotr Zieliński",ovr:83,pos:"CM",club:"Inter Milan",nat:"Poland",pac:72,sho:82,pas:85,dri:84,def:62,phy:69},
+];
+
+// Deduplicate
+const seen = new Set();
+const PLAYERS = PLAYER_DB.filter(p => {
+  if (seen.has(p.n)) return false;
+  seen.add(p.n);
+  return true;
+});
+
+// ═══════════════════════════════════════════════
+// GAME STATE
+// ═══════════════════════════════════════════════
+let G = {
+  teams: [],         // [{name, budget, squad:[]}]
+  pool: [],          // shuffled player pool
+  poolIdx: 0,
+  currentBid: 0,
+  currentBidder: null,
+  timerSec: 30,
+  timerInterval: null,
+  configTimer: 30,
+  configBudget: 1000,
+  configSquadSize: 15,
+  standings: {},     // {teamName: {pts,w,l,d}}
+};
+
+// ═══════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function fmtM(n) { return `£${n}M`; }
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (id === 'results-screen') renderSquads();
+  if (id === 'leaderboard-screen') renderLeaderboard();
+  if (id === 'match-screen') {
+    document.getElementById('match-sim').style.display = 'none';
+    document.getElementById('match-setup').style.display = 'block';
+    populateMatchSelectors();
+  }
+}
+function showNotif(msg, col) {
+  const n = document.getElementById('notif');
+  n.textContent = msg;
+  n.style.borderColor = col || 'var(--green)';
+  n.style.color = col || 'var(--green)';
+  n.classList.add('show');
+  setTimeout(() => n.classList.remove('show'), 3000);
+}
+function showNotifManual(msg) { showNotif(msg); }
+function posColor(pos) {
+  if (pos === 'GK') return '#FFD600';
+  if (['CB','LB','RB','LWB','RWB'].includes(pos)) return '#4fc3f7';
+  if (['CM','CDM','CAM'].includes(pos)) return '#aed581';
+  return '#ff8a65';
+}
+
+// ═══════════════════════════════════════════════
+// LOBBY
+// ═══════════════════════════════════════════════
+function addPlayer() {
+  const list = document.getElementById('player-list');
+  const idx = list.children.length + 2;
+  const row = document.createElement('div');
+  row.className = 'player-entry';
+  row.innerHTML = `<input type="text" placeholder="Manager ${idx} team name" maxlength="24"/>
+    <button class="btn btn-ghost btn-sm" onclick="this.parentElement.remove()">✕</button>`;
+  list.appendChild(row);
+}
+
+function startAuction() {
+  const hostName = document.getElementById('host-name').value.trim() || 'Your Team';
+  G.configBudget = parseInt(document.getElementById('budget-select').value);
+  G.configTimer = parseInt(document.getElementById('timer-select').value);
+  G.configSquadSize = parseInt(document.getElementById('squad-size-select').value);
+
+  const others = [...document.querySelectorAll('#player-list input')].map(i => i.value.trim()).filter(Boolean);
+  const names = [hostName, ...others];
+  if (names.length < 2) { showNotif('Add at least 1 other manager!', 'var(--red)'); return; }
+
+  G.teams = names.map(name => ({ name, budget: G.configBudget, squad: [] }));
+  G.standings = {};
+  G.teams.forEach(t => G.standings[t.name] = { pts: 0, w: 0, l: 0, d: 0 });
+  G.pool = shuffle(PLAYERS);
+  G.poolIdx = 0;
+  G.currentBid = 0;
+  G.currentBidder = null;
+  G.timerSec = G.configTimer;
+
+  showScreen('auction-screen');
+  renderBiddersSidebar();
+  nextPlayer();
+}
+
+// ═══════════════════════════════════════════════
+// AUCTION ENGINE
+// ═══════════════════════════════════════════════
+function currentPlayer() { return G.pool[G.poolIdx]; }
+
+function nextPlayer() {
+  stopTimer();
+  if (G.poolIdx >= G.pool.length) { endAuction(); return; }
+  const p = currentPlayer();
+  G.currentBid = 0;
+  G.currentBidder = null;
+  updatePlayerSpot(p);
+  updateProgress();
+  updateBidDisplay();
+  startTimer();
+  renderBiddersSidebar();
+  document.getElementById('sold-panel').style.display = 'none';
+}
+
+function updatePlayerSpot(p) {
+  document.getElementById('spot-rating').textContent = p.ovr;
+  document.getElementById('spot-name').textContent = p.n;
+  document.getElementById('spot-club').textContent = p.club;
+  document.getElementById('spot-nation').textContent = p.nat;
+  const posEl = document.getElementById('spot-pos');
+  posEl.textContent = p.pos;
+  posEl.style.color = posColor(p.pos);
+
+  const attrs = document.getElementById('spot-attrs');
+  const attrKeys = p.pos === 'GK'
+    ? [['PAC',p.pac],['DRI',p.dri],['PHY',p.phy]]
+    : [['PAC',p.pac],['SHO',p.sho],['PAS',p.pas],['DRI',p.dri],['DEF',p.def],['PHY',p.phy]];
+  attrs.innerHTML = attrKeys.map(([k,v]) =>
+    `<div class="attr-box"><div class="attr-val">${v}</div><div class="attr-lbl">${k}</div></div>`
+  ).join('');
+
+  // Bid presets
+  const base = Math.max(1, Math.floor(p.ovr * 0.3));
+  const presets = [base, base*2, base*3, base*5];
+  document.getElementById('bid-presets').innerHTML = presets.map(pr =>
+    `<button class="bid-preset" onclick="quickBid(${pr})">${fmtM(pr)}</button>`
+  ).join('');
+}
+
+function updateProgress() {
+  document.getElementById('auction-progress').textContent =
+    `Player ${G.poolIdx + 1} of ${G.pool.length}`;
+  document.getElementById('pool-remaining').textContent =
+    `${G.pool.length - G.poolIdx} left`;
+}
+
+function updateBidDisplay() {
+  document.getElementById('bid-display').textContent = G.currentBid > 0 ? fmtM(G.currentBid) : '£0M';
+  document.getElementById('bid-by').textContent = G.currentBidder
+    ? `Leading bid by ${G.currentBidder.name}`
+    : 'No bids yet – be first!';
+}
+
+function updateTurnBanner() {
+  // Show whose "turn to bid" (cycles if no bids, else any can outbid)
+  const cheapestTeam = [...G.teams].filter(t => t.budget > G.currentBid).sort((a,b) => b.squad.length - a.squad.length)[0];
+  const t = G.currentBidder || cheapestTeam || G.teams[0];
+  document.getElementById('turn-name').textContent = t ? t.name : '-';
+  document.getElementById('turn-budget').textContent = t ? fmtM(t.budget) : '-';
+}
+
+function placeBid() {
+  // Prompt which manager is bidding
+  const options = G.teams.map((t, i) => `${i}: ${t.name} (Budget: ${fmtM(t.budget)})`).join('\n');
+  const raw = prompt(`Who is bidding?\n\n${options}\n\nEnter manager number:`);
+  if (raw === null) return;
+  const idx = parseInt(raw);
+  if (isNaN(idx) || idx < 0 || idx >= G.teams.length) { showNotif('Invalid selection', 'var(--red)'); return; }
+
+  const team = G.teams[idx];
+  const minBid = G.currentBid + 1;
+  const bidRaw = prompt(`${team.name} – Current bid: ${fmtM(G.currentBid)}\nEnter bid amount (min ${minBid}M, max ${team.budget}M):`);
+  if (bidRaw === null) return;
+  const bid = parseInt(bidRaw);
+
+  if (isNaN(bid) || bid < minBid) { showNotif(`Bid must be at least ${fmtM(minBid)}`, 'var(--red)'); return; }
+  if (bid > team.budget) { showNotif(`${team.name} only has ${fmtM(team.budget)}!`, 'var(--red)'); return; }
+
+  G.currentBid = bid;
+  G.currentBidder = team;
+  G.timerSec = G.configTimer; // reset timer on new bid
+  updateBidDisplay();
+  updateTurnBanner();
+  addLog(`${team.name} bid ${fmtM(bid)} on ${currentPlayer().n}`);
+  renderBiddersSidebar();
+}
+
+function quickBid(amount) {
+  const options = G.teams.map((t, i) => `${i}: ${t.name} (${fmtM(t.budget)})`).join('\n');
+  const raw = prompt(`Quick bid ${fmtM(amount)} — who is bidding?\n\n${options}\n\nEnter number:`);
+  if (raw === null) return;
+  const idx = parseInt(raw);
+  if (isNaN(idx) || idx < 0 || idx >= G.teams.length) { return; }
+  const team = G.teams[idx];
+  if (amount <= G.currentBid) { showNotif(`Must bid more than ${fmtM(G.currentBid)}`, 'var(--red)'); return; }
+  if (amount > team.budget) { showNotif(`${team.name} can't afford this!`, 'var(--red)'); return; }
+  G.currentBid = amount;
+  G.currentBidder = team;
+  G.timerSec = G.configTimer;
+  updateBidDisplay();
+  updateTurnBanner();
+  addLog(`${team.name} bid ${fmtM(amount)} on ${currentPlayer().n}`);
+  renderBiddersSidebar();
+}
+
+function skipPlayer() {
+  addLog(`⏭ ${currentPlayer().n} was skipped`, false);
+  G.pool.push(G.pool.splice(G.poolIdx, 1)[0]); // move to end
+  nextPlayer();
+}
+
+// Timer
+function startTimer() {
+  G.timerSec = G.configTimer;
+  updateTimerDisplay();
+  G.timerInterval = setInterval(() => {
+    G.timerSec--;
+    updateTimerDisplay();
+    if (G.timerSec <= 0) {
+      stopTimer();
+      soldCurrentPlayer();
+    }
+  }, 1000);
+}
+
+function stopTimer() {
+  clearInterval(G.timerInterval);
+  G.timerInterval = null;
+}
+
+function updateTimerDisplay() {
+  const el = document.getElementById('auction-timer');
+  el.textContent = G.timerSec;
+  el.classList.toggle('urgent', G.timerSec <= 5);
+  updateTurnBanner();
+}
+
+function soldCurrentPlayer() {
+  const p = currentPlayer();
+  if (G.currentBidder && G.currentBid > 0) {
+    G.currentBidder.budget -= G.currentBid;
+    G.currentBidder.squad.push({ ...p, pricePaid: G.currentBid });
+    addLog(`🏆 ${p.n} → ${G.currentBidder.name} for ${fmtM(G.currentBid)}`, true);
+    showSoldPanel(p, G.currentBidder, G.currentBid);
+    showNotif(`⚽ ${p.n} sold to ${G.currentBidder.name} for ${fmtM(G.currentBid)}!`);
+  } else {
+    addLog(`❌ ${p.n} went UNSOLD`, false);
+    // Move to end if someone still needs players
+    const needsMore = G.teams.some(t => t.squad.length < G.configSquadSize);
+    if (needsMore) G.pool.push(G.pool.splice(G.poolIdx, 1)[0]);
+    else G.poolIdx++;
+  }
+  G.poolIdx++;
+  renderBiddersSidebar();
+
+  // Check if all teams have min squad OR pool exhausted
+  const allDone = G.teams.every(t => t.squad.length >= G.configSquadSize);
+  if (allDone || G.poolIdx >= G.pool.length) {
+    setTimeout(endAuction, 1200);
+  } else {
+    setTimeout(nextPlayer, 1200);
+  }
+}
+
+function showSoldPanel(p, team, price) {
+  document.getElementById('sold-panel').style.display = 'block';
+  document.getElementById('sold-info').innerHTML = `
+    <div style="font-size:1rem;font-weight:700;color:var(--green);">${p.n}</div>
+    <div style="font-size:0.8rem;color:var(--muted);">${p.pos} · OVR ${p.ovr}</div>
+    <div style="margin-top:0.4rem;font-size:0.85rem;">
+      <span style="color:var(--muted);">Bought by </span>
+      <strong>${team.name}</strong>
+    </div>
+    <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:var(--gold);">${fmtM(price)}</div>
+  `;
+}
+
+function addLog(msg, isWin) {
+  const list = document.getElementById('log-list');
+  const el = document.createElement('div');
+  el.className = 'log-entry' + (isWin ? ' win' : '');
+  el.textContent = msg;
+  list.prepend(el);
+}
+
+function renderBiddersSidebar() {
+  const sorted = [...G.teams].sort((a,b) => {
+    const aOvr = avgOvr(a); const bOvr = avgOvr(b);
+    return bOvr - aOvr;
+  });
+  document.getElementById('bidders-list').innerHTML = sorted.map(t => {
+    const filled = t.squad.length;
+    const target = G.configSquadSize;
+    const slots = Array.from({length: target}, (_, i) =>
+      `<div class="sq-slot ${i < filled ? 'filled' : (filled < target && i === filled ? 'need' : '')}"></div>`
+    ).join('');
+    return `
+      <div class="bidder-row">
+        <div class="bidder-avatar">${t.name.charAt(0).toUpperCase()}</div>
+        <div class="bidder-info">
+          <div class="bidder-name">${t.name}</div>
+          <div class="bidder-stats">${filled}/${target} players · OVR ${avgOvr(t)}</div>
+          <div class="squad-bar">${slots}</div>
+        </div>
+        <div class="bidder-budget" style="color:${t.budget < 50 ? 'var(--red)' : 'var(--green)'}">${fmtM(t.budget)}</div>
+      </div>`;
+  }).join('');
+}
+
+function avgOvr(team) {
+  if (!team.squad.length) return 0;
+  return Math.round(team.squad.reduce((s, p) => s + p.ovr, 0) / team.squad.length);
+}
+
+function endAuction() {
+  stopTimer();
+  const underBuilt = G.teams.filter(t => t.squad.length < G.configSquadSize);
+  let msg = 'All teams built! Click to see squads.';
+  if (underBuilt.length) {
+    msg = `${underBuilt.map(t => t.name).join(', ')} don't have ${G.configSquadSize} players yet — they can still compete!`;
+  }
+  document.getElementById('unsold-modal-text').textContent = msg;
+  document.getElementById('unsold-modal').classList.add('open');
+}
+
+function finishAuction() {
+  document.getElementById('unsold-modal').classList.remove('open');
+  showScreen('results-screen');
+}
+
+// ═══════════════════════════════════════════════
+// SQUADS SCREEN
+// ═══════════════════════════════════════════════
+function renderSquads() {
+  document.getElementById('teams-grid').innerHTML = G.teams.map(t => {
+    const ovr = avgOvr(t);
+    const sortedSquad = [...t.squad].sort((a, b) => {
+      const order = ['GK','CB','LB','RB','CDM','CM','CAM','LW','RW','ST'];
+      return (order.indexOf(a.pos)||99) - (order.indexOf(b.pos)||99);
+    });
+    return `
+      <div class="team-card">
+        <div class="team-card-header">
+          <div>
+            <div class="team-card-name">${t.name}</div>
+            <div class="team-card-budget">Budget left: ${fmtM(t.budget)}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="team-ovr">${ovr}</div>
+            <div class="team-ovr-label">OVR</div>
+          </div>
+        </div>
+        <div class="squad-list">
+          ${sortedSquad.map(p => `
+            <div class="squad-player">
+              <div class="sp-rating">${p.ovr}</div>
+              <div class="sp-pos" style="color:${posColor(p.pos)}">${p.pos}</div>
+              <div class="sp-name">${p.n}</div>
+              <div class="sp-price">${fmtM(p.pricePaid)}</div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════
+// MATCH SIMULATION
+// ═══════════════════════════════════════════════
+function populateMatchSelectors() {
+  const opts = G.teams.map((t, i) => `<option value="${i}">${t.name}</option>`).join('');
+  document.getElementById('home-team-select').innerHTML = opts;
+  document.getElementById('away-team-select').innerHTML = G.teams.map((t, i) =>
+    `<option value="${i}" ${i === 1 ? 'selected' : ''}>${t.name}</option>`).join('');
+}
+
+function startMatch() {
+  const homeIdx = parseInt(document.getElementById('home-team-select').value);
+  const awayIdx = parseInt(document.getElementById('away-team-select').value);
+  if (homeIdx === awayIdx) { showNotif('Pick two different teams!', 'var(--red)'); return; }
+
+  const home = G.teams[homeIdx];
+  const away = G.teams[awayIdx];
+
+  document.getElementById('match-setup').style.display = 'none';
+  document.getElementById('match-sim').style.display = 'block';
+  document.getElementById('home-team-label').textContent = home.name;
+  document.getElementById('away-team-label').textContent = away.name;
+  document.getElementById('home-score').textContent = '0';
+  document.getElementById('away-score').textContent = '0';
+  document.getElementById('match-minute').textContent = 'KO';
+  document.getElementById('match-status').textContent = '';
+  document.getElementById('events-feed').innerHTML = '';
+  document.getElementById('match-actions').style.display = 'none';
+
+  simulateMatch(home, away, homeIdx, awayIdx);
+}
+
+function simulateMatch(home, away, homeIdx, awayIdx) {
+  const homeOvr = avgOvr(home);
+  const awayOvr = avgOvr(away);
+  const homeChem = calcChemistry(home);
+  const awayChem = calcChemistry(away);
+  const homeStr = homeOvr * (1 + homeChem * 0.1) + 2; // small home advantage
+  const awayStr = awayOvr * (1 + awayChem * 0.1);
+  const total = homeStr + awayStr;
+
+  let homeGoals = 0, awayGoals = 0;
+  const events = [];
+
+  // Generate match events
+  const numEvents = 8 + Math.floor(Math.random() * 8);
+  const minutes = shuffle([...Array(90).keys()].map(x => x + 1)).slice(0, numEvents).sort((a,b) => a-b);
+
+  for (const min of minutes) {
+    const r = Math.random();
+    const isHome = Math.random() < homeStr / total;
+    const team = isHome ? home : away;
+    const scorer = getRandomPlayer(team, ['ST','LW','RW','CAM']);
+    const assister = getRandomPlayer(team, ['CM','CAM','LW','RW','LB','RB']);
+
+    if (r < 0.3) {
+      // GOAL
+      if (isHome) homeGoals++; else awayGoals++;
+      events.push({ min, type: 'goal', text: `⚽ GOAL! ${scorer.n} scores for ${team.name}! (Assist: ${assister ? assister.n : 'N/A'})`, isHome });
+    } else if (r < 0.5) {
+      events.push({ min, type: 'miss', text: `🎯 ${scorer.n} goes close but misses the target!`, isHome });
+    } else if (r < 0.6) {
+      const booked = getRandomPlayer(team, null);
+      events.push({ min, type: 'card', text: `🟨 ${booked ? booked.n : scorer.n} (${team.name}) is booked!`, isHome });
+    } else {
+      events.push({ min, type: 'foul', text: `👟 ${assister ? assister.n : scorer.n} wins the ball back for ${team.name}.`, isHome });
+    }
+  }
+
+  // Animate events
+  const feed = document.getElementById('events-feed');
+  let eIdx = 0;
+
+  function showNext() {
+    if (eIdx >= events.length) {
+      // Full time
+      document.getElementById('match-minute').textContent = 'FT';
+      const result = homeGoals > awayGoals ? 'home' : awayGoals > homeGoals ? 'away' : 'draw';
+      const desc = result === 'home' ? `${home.name} win!` : result === 'away' ? `${away.name} win!` : 'It\'s a draw!';
+      document.getElementById('match-status').textContent = `Full Time — ${desc}`;
+
+      // Update standings
+      if (result === 'home') {
+        G.standings[home.name].pts += 3; G.standings[home.name].w++;
+        G.standings[away.name].l++;
+      } else if (result === 'away') {
+        G.standings[away.name].pts += 3; G.standings[away.name].w++;
+        G.standings[home.name].l++;
+      } else {
+        G.standings[home.name].pts += 1; G.standings[home.name].d = (G.standings[home.name].d||0)+1;
+        G.standings[away.name].pts += 1; G.standings[away.name].d = (G.standings[away.name].d||0)+1;
+      }
+
+      document.getElementById('match-actions').style.display = 'flex';
+      return;
+    }
+
+    const ev = events[eIdx++];
+    document.getElementById('match-minute').textContent = `${ev.min}'`;
+    if (ev.type === 'goal') {
+      document.getElementById('home-score').textContent = homeGoals = Math.max(0, events.slice(0, eIdx).filter(e => e.type === 'goal' && e.isHome).length);
+      document.getElementById('away-score').textContent = awayGoals = Math.max(0, events.slice(0, eIdx).filter(e => e.type === 'goal' && !e.isHome).length);
+    }
+    const el = document.createElement('div');
+    el.className = `event-item ${ev.type}`;
+    el.innerHTML = `<span class="event-min">${ev.min}'</span><span class="event-text">${ev.text}</span>`;
+    feed.prepend(el);
+    feed.scrollTop = 0;
+    setTimeout(showNext, 600 + Math.random() * 600);
+  }
+
+  setTimeout(showNext, 500);
+}
+
+function getRandomPlayer(team, positions) {
+  let pool = team.squad;
+  if (positions) pool = pool.filter(p => positions.includes(p.pos));
+  if (!pool.length) pool = team.squad;
+  if (!pool.length) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function calcChemistry(team) {
+  // Simple chemistry: ratio of players from same nation
+  const nations = team.squad.map(p => p.nat);
+  const counts = {};
+  nations.forEach(n => counts[n] = (counts[n]||0)+1);
+  const max = Math.max(...Object.values(counts), 0);
+  return Math.min(max / Math.max(team.squad.length, 1), 1);
+}
+
+function playAgain() {
+  document.getElementById('match-sim').style.display = 'none';
+  document.getElementById('match-setup').style.display = 'block';
+}
+
+// ═══════════════════════════════════════════════
+// LEADERBOARD
+// ═══════════════════════════════════════════════
+function renderLeaderboard() {
+  const sorted = [...G.teams].sort((a,b) => {
+    const as = G.standings[a.name] || {};
+    const bs = G.standings[b.name] || {};
+    return (bs.pts||0) - (as.pts||0) || avgOvr(b) - avgOvr(a);
+  });
+
+  document.getElementById('lb-rows').innerHTML = sorted.map((t, i) => {
+    const s = G.standings[t.name] || {pts:0,w:0,l:0,d:0};
+    const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+    return `
+      <div class="lb-row">
+        <div class="lb-rank ${rankClass}">${i+1}</div>
+        <div class="lb-team-name">${t.name}</div>
+        <div class="lb-pts">${s.pts||0}</div>
+        <div class="lb-num">${s.w||0}</div>
+        <div class="lb-num">${s.l||0}</div>
+        <div class="lb-ovr">${avgOvr(t)}</div>
+      </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════
+// RESTART
+// ═══════════════════════════════════════════════
+function restartGame() {
+  stopTimer();
+  G = { teams:[], pool:[], poolIdx:0, currentBid:0, currentBidder:null, timerSec:30, timerInterval:null, configTimer:30, configBudget:1000, configSquadSize:15, standings:{} };
+  document.getElementById('player-list').innerHTML = '';
+  showScreen('lobby-screen');
+}
+</script>
+</body>
+</html>
